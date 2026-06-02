@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { api } from "@/lib/api"
 import type {
   ConstructionSite,
+  EquipmentCoverageItem,
   EquipmentPlan,
   EquipmentPlanStats,
   FleetVehicle,
@@ -12,6 +13,7 @@ import type {
 import {
   EQUIPMENT_PLAN_SHIFT_LABELS,
   EQUIPMENT_PLAN_STATUS_LABELS,
+  FLEET_VEHICLE_TYPE_LABELS,
 } from "@/lib/types"
 import { getErrorMessage } from "@/lib/feedback"
 import { Badge } from "@/components/ui/badge"
@@ -29,7 +31,6 @@ import {
   AlertCircleIcon,
   Building06Icon,
   Calendar03Icon,
-  Car01Icon,
   CheckmarkBadge01Icon,
   HourglassIcon,
   Wrench01Icon,
@@ -67,26 +68,39 @@ export default function DashboardPage() {
     failed: 0,
     missingActual: 0,
     withoutDriver: 0,
+    deficitDemands: 0,
+    criticalDeficits: 0,
+    averageCoverage: 100,
   })
   const [plans, setPlans] = useState<EquipmentPlan[]>([])
+  const [coverage, setCoverage] = useState<EquipmentCoverageItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [vehiclesData, sitesData, serviceData, planStatsData, plansData] =
+        const [
+          vehiclesData,
+          sitesData,
+          serviceData,
+          planStatsData,
+          plansData,
+          coverageData,
+        ] =
           await Promise.all([
             api.fleet.getAll(),
             api.sites.getAll(),
             api.serviceEvents.getStats(),
             api.equipmentPlans.getStats(),
             api.equipmentPlans.getAll(),
+            api.equipmentPlans.getCoverage(),
           ])
         setVehicles(vehiclesData)
         setSites(sitesData)
         setServiceStats(serviceData)
         setPlanStats(planStatsData)
         setPlans(plansData)
+        setCoverage(coverageData)
       } catch (err) {
         toast.error(getErrorMessage(err, "Не удалось загрузить дашборд"))
       } finally {
@@ -112,6 +126,9 @@ export default function DashboardPage() {
     (vehicle) => vehicle.status === "active" && !vehicle.assignedDriver
   )
   const sitesWithEquipment = sites.filter((site) => site.vehicleCount > 0)
+  const criticalCoverageItems = coverage.filter(
+    (item) => item.deficit > 0 && item.priority === "critical"
+  )
 
   const cards = [
     {
@@ -143,9 +160,9 @@ export default function DashboardPage() {
       className: "text-primary bg-primary/10",
     },
     {
-      label: "Плановые смены",
-      value: planStats.planned + planStats.inProgress,
-      note: `${planStats.missingActual} требуют факта`,
+      label: "Обеспеченность",
+      value: `${planStats.averageCoverage}%`,
+      note: `${planStats.deficitDemands} дефицитов потребности`,
       icon: Calendar03Icon,
       className: "text-violet-600 bg-violet-500/10",
     },
@@ -284,6 +301,31 @@ export default function DashboardPage() {
               <span className="text-sm">Плановые записи без водителя</span>
               <Badge variant="secondary">{planStats.withoutDriver}</Badge>
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm">Дефицит потребностей объектов</span>
+              <Badge variant="secondary">{planStats.deficitDemands}</Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm">Критические дефициты техники</span>
+              <Badge variant="secondary">{planStats.criticalDeficits}</Badge>
+            </div>
+            {criticalCoverageItems.slice(0, 3).map((item) => (
+              <div key={item.id} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{item.siteName}</span>
+                  <Badge
+                    variant="secondary"
+                    className="bg-red-500/10 text-red-700 dark:text-red-300"
+                  >
+                    -{item.deficit}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {FLEET_VEHICLE_TYPE_LABELS[item.vehicleType]} ·{" "}
+                  {item.stageName ?? "без этапа"}
+                </p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>

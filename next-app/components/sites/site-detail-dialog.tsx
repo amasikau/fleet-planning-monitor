@@ -1,10 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { ConstructionSiteDetail, AvailableVehicle, EquipmentPlan } from "@/lib/types"
+import type {
+  AvailableVehicle,
+  ConstructionSiteDetail,
+  EquipmentCoverageItem,
+  EquipmentPlan,
+} from "@/lib/types"
 import {
   EQUIPMENT_PLAN_SHIFT_LABELS,
   EQUIPMENT_PLAN_STATUS_LABELS,
+  FLEET_VEHICLE_TYPE_LABELS,
 } from "@/lib/types"
 import Link from "next/link"
 import { api } from "@/lib/api"
@@ -72,6 +78,7 @@ export function SiteDetailDialog({
   const [loading, setLoading] = useState(false)
   const [availableVehicles, setAvailableVehicles] = useState<AvailableVehicle[]>([])
   const [plans, setPlans] = useState<EquipmentPlan[]>([])
+  const [coverage, setCoverage] = useState<EquipmentCoverageItem[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("")
   const [assignLoading, setAssignLoading] = useState(false)
 
@@ -79,14 +86,16 @@ export function SiteDetailDialog({
     if (!siteId) return
     setLoading(true)
     try {
-      const [siteData, vehicles, planData] = await Promise.all([
+      const [siteData, vehicles, planData, coverageData] = await Promise.all([
         api.sites.getOne(siteId),
         api.sites.getAvailableVehicles(siteId),
         api.equipmentPlans.getAll({ siteId }),
+        api.equipmentPlans.getCoverage({ siteId }),
       ])
       setDetail(siteData)
       setAvailableVehicles(vehicles)
       setPlans(planData)
+      setCoverage(coverageData)
     } catch (err) {
       toast.error(getErrorMessage(err, "Не удалось загрузить данные объекта"))
     } finally {
@@ -100,6 +109,7 @@ export function SiteDetailDialog({
     } else {
       setDetail(null)
       setPlans([])
+      setCoverage([])
       setSelectedVehicleId("")
     }
   }, [open, siteId, fetchDetail])
@@ -133,6 +143,14 @@ export function SiteDetailDialog({
   }
 
   const hasCoordinates = detail?.latitude != null && detail?.longitude != null
+  const coverageDeficits = coverage.filter((item) => item.deficit > 0)
+  const averageCoverage =
+    coverage.length > 0
+      ? Math.round(
+          coverage.reduce((sum, item) => sum + item.coveragePercent, 0) /
+            coverage.length
+        )
+      : 100
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,7 +285,7 @@ export function SiteDetailDialog({
                   />
                   Потребность и план техники
                   <Badge variant="secondary" className="text-xs">
-                    {plans.length}
+                    {averageCoverage}%
                   </Badge>
                 </h3>
                 {!readonly && !detail.isCompleted && (
@@ -276,6 +294,46 @@ export function SiteDetailDialog({
                   </Button>
                 )}
               </div>
+
+              {coverage.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {coverage.slice(0, 4).map((item) => (
+                    <div key={item.id} className="rounded-lg border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium">
+                          {FLEET_VEHICLE_TYPE_LABELS[item.vehicleType]}
+                        </p>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            item.deficit > 0
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                              : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          }
+                        >
+                          {item.coveragePercent}%
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.stageName ?? "Без этапа"} · нужно{" "}
+                        {item.requiredCount}, назначено {item.assignedCount}
+                      </p>
+                      {item.deficit > 0 && (
+                        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                          Дефицит: {item.deficit} ед.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {coverageDeficits.length > 0 && (
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Не закрыто потребностей: {coverageDeficits.length}. Откройте
+                  план-график для перераспределения техники.
+                </p>
+              )}
 
               {plans.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">

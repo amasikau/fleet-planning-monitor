@@ -235,6 +235,23 @@ export const FLEET_AUDIT_ACTION_LABELS: Record<FleetAuditAction, string> = {
   unassign_driver: "Открепление водителя",
 }
 
+export type FleetVehicleType =
+  | "dump_truck"
+  | "crane"
+  | "excavator"
+  | "loader"
+  | "van"
+  | "pickup"
+
+export const FLEET_VEHICLE_TYPE_LABELS: Record<FleetVehicleType, string> = {
+  dump_truck: "Самосвал",
+  crane: "Автокран",
+  excavator: "Экскаватор",
+  loader: "Погрузчик",
+  van: "Фургон снабжения",
+  pickup: "Пикап",
+}
+
 export interface FleetAssignedDriver {
   userId: string
   username: string
@@ -246,6 +263,7 @@ export interface FleetVehicle {
   brand: string
   model: string
   plateNumber: string
+  type: FleetVehicleType
   status: FleetVehicleStatus
   notes: string
   assignedDriver: FleetAssignedDriver | null
@@ -363,13 +381,69 @@ export const EQUIPMENT_PLAN_STATUS_LABELS: Record<
   failed: "Срыв",
 }
 
+export type RoadWorkStageType =
+  | "preparation"
+  | "earthworks"
+  | "milling"
+  | "base_layer"
+  | "asphalt_paving"
+  | "compaction"
+  | "material_delivery"
+  | "marking"
+  | "maintenance"
+
+export const ROAD_WORK_STAGE_TYPE_LABELS: Record<RoadWorkStageType, string> = {
+  preparation: "Подготовка участка",
+  earthworks: "Земляные работы",
+  milling: "Фрезерование покрытия",
+  base_layer: "Устройство основания",
+  asphalt_paving: "Укладка асфальта",
+  compaction: "Уплотнение",
+  material_delivery: "Подвоз смеси и материалов",
+  marking: "Разметка",
+  maintenance: "Содержание дороги",
+}
+
+export type RoadWorkStageStatus =
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "delayed"
+
+export const ROAD_WORK_STAGE_STATUS_LABELS: Record<
+  RoadWorkStageStatus,
+  string
+> = {
+  planned: "Запланирован",
+  in_progress: "В работе",
+  completed: "Выполнен",
+  delayed: "Отстаёт",
+}
+
+export type EquipmentDemandPriority = "normal" | "high" | "critical"
+
+export const EQUIPMENT_DEMAND_PRIORITY_LABELS: Record<
+  EquipmentDemandPriority,
+  string
+> = {
+  normal: "Обычная",
+  high: "Высокая",
+  critical: "Критическая",
+}
+
 export interface EquipmentPlan {
   id: string
   siteId: string
   siteName: string
   siteWorkType: string
+  stageId: string | null
+  stageName: string | null
+  stageType: RoadWorkStageType | null
+  demandId: string | null
+  demandVehicleType: FleetVehicleType | null
   vehicleId: string
   vehicleLabel: string
+  vehicleType: FleetVehicleType
   vehicleStatus: "active" | "reserve" | "maintenance" | "repair"
   driver: { userId: string; fullName: string } | null
   workDate: string
@@ -390,6 +464,60 @@ export interface EquipmentPlanStats {
   failed: number
   missingActual: number
   withoutDriver: number
+  deficitDemands: number
+  criticalDeficits: number
+  averageCoverage: number
+}
+
+export interface RoadWorkStage {
+  id: string
+  siteId: string
+  siteName: string
+  siteWorkType: string
+  type: RoadWorkStageType
+  name: string
+  startDate: string
+  endDate: string
+  status: RoadWorkStageStatus
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EquipmentDemand {
+  id: string
+  siteId: string
+  siteName: string
+  siteWorkType: string
+  stageId: string | null
+  stageName: string | null
+  stageType: RoadWorkStageType | null
+  vehicleType: FleetVehicleType
+  requiredCount: number
+  plannedHours: number
+  priority: EquipmentDemandPriority
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EquipmentCoverageItem {
+  id: string
+  siteId: string
+  siteName: string
+  stageId: string | null
+  stageName: string | null
+  stageType: RoadWorkStageType | null
+  vehicleType: FleetVehicleType
+  requiredCount: number
+  assignedCount: number
+  deficit: number
+  coveragePercent: number
+  plannedHours: number
+  assignedPlannedHours: number
+  priority: EquipmentDemandPriority
+  riskLevel: "low" | "medium" | "high"
+  recommendation: string
 }
 
 /* ── Construction sites ── */

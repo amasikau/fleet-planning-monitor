@@ -11,6 +11,8 @@ async function main() {
   await prisma.notificationRead.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.equipmentPlanAssignment.deleteMany();
+  await prisma.equipmentDemand.deleteMany();
+  await prisma.roadWorkStage.deleteMany();
   await prisma.constructionSiteAuditLog.deleteMany();
   await prisma.siteVehicle.deleteMany();
   await prisma.constructionSite.deleteMany();
@@ -736,10 +738,173 @@ async function main() {
     ],
   });
 
+  const m5MaterialStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: m5Repair.id,
+      type: 'material_delivery',
+      name: 'Вывоз фрезерованного покрытия и подвоз щебня',
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+      endDate: new Date('2026-06-07T00:00:00.000Z'),
+      status: 'in_progress',
+      notes:
+        'Критична непрерывная работа самосвалов между картами ремонта и площадкой складирования.',
+    },
+  });
+
+  const m5BarrierStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: m5Repair.id,
+      type: 'preparation',
+      name: 'Монтаж временных барьерных ограждений',
+      startDate: new Date('2026-06-03T00:00:00.000Z'),
+      endDate: new Date('2026-06-05T00:00:00.000Z'),
+      status: 'planned',
+      notes: 'Работы выполняются в ночное окно с частичным ограничением движения.',
+    },
+  });
+
+  const centralSupplyStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: centralStreet.id,
+      type: 'material_delivery',
+      name: 'Подвоз асфальтобетонной смеси',
+      startDate: new Date('2026-06-04T00:00:00.000Z'),
+      endDate: new Date('2026-06-06T00:00:00.000Z'),
+      status: 'planned',
+      notes:
+        'Нужно исключить простой укладочного звена из-за задержки смеси.',
+    },
+  });
+
+  const centralAsphaltStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: centralStreet.id,
+      type: 'asphalt_paving',
+      name: 'Укладка верхнего слоя покрытия',
+      startDate: new Date('2026-06-05T00:00:00.000Z'),
+      endDate: new Date('2026-06-08T00:00:00.000Z'),
+      status: 'planned',
+      notes: 'Связать самосвалы, снабжение и контроль уплотнения.',
+    },
+  });
+
+  const potholeControlStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: potholeProgram.id,
+      type: 'maintenance',
+      name: 'Контроль закрытия карт ямочного ремонта',
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+      endDate: new Date('2026-06-14T00:00:00.000Z'),
+      status: 'in_progress',
+      notes:
+        'Оперативные выезды прораба по адресной программе ремонта покрытия.',
+    },
+  });
+
+  const eastBaseLayerStage = await prisma.roadWorkStage.create({
+    data: {
+      siteId: eastBaseRoad.id,
+      type: 'base_layer',
+      name: 'Отсыпка и планировка основания',
+      startDate: new Date('2026-05-27T00:00:00.000Z'),
+      endDate: new Date('2026-06-10T00:00:00.000Z'),
+      status: 'delayed',
+      notes:
+        'Отставание из-за простоя экскаватора и нехватки самосвалов на подвозе щебня.',
+    },
+  });
+
+  const m5DumpDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: m5Repair.id,
+      stageId: m5MaterialStage.id,
+      vehicleType: 'dump_truck',
+      requiredCount: 2,
+      plannedHours: 8,
+      priority: 'critical',
+      notes: 'Две единицы нужны для бесперебойного вывоза и подвоза материалов.',
+    },
+  });
+
+  const m5CraneDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: m5Repair.id,
+      stageId: m5BarrierStage.id,
+      vehicleType: 'crane',
+      requiredCount: 1,
+      plannedHours: 6,
+      priority: 'high',
+      notes: 'Автокран нужен на ночное окно монтажа ограждений.',
+    },
+  });
+
+  const centralDumpDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: centralStreet.id,
+      stageId: centralSupplyStage.id,
+      vehicleType: 'dump_truck',
+      requiredCount: 2,
+      plannedHours: 8,
+      priority: 'critical',
+      notes:
+        'Самосвалы должны обеспечить непрерывный подвоз асфальтобетонной смеси.',
+    },
+  });
+
+  const centralVanDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: centralStreet.id,
+      stageId: centralSupplyStage.id,
+      vehicleType: 'van',
+      requiredCount: 1,
+      plannedHours: 8,
+      priority: 'normal',
+      notes: 'Доставка знаков, конусов и ручного инструмента ночной бригаде.',
+    },
+  });
+
+  const centralPickupDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: centralStreet.id,
+      stageId: centralAsphaltStage.id,
+      vehicleType: 'pickup',
+      requiredCount: 1,
+      plannedHours: 6,
+      priority: 'high',
+      notes: 'Контроль поставки смеси и качества уплотнения на участке.',
+    },
+  });
+
+  const potholePickupDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: potholeProgram.id,
+      stageId: potholeControlStage.id,
+      vehicleType: 'pickup',
+      requiredCount: 1,
+      plannedHours: 8,
+      priority: 'high',
+      notes: 'Оперативный объезд адресов и приёмка карт ремонта.',
+    },
+  });
+
+  const eastBaseDumpDemand = await prisma.equipmentDemand.create({
+    data: {
+      siteId: eastBaseRoad.id,
+      stageId: eastBaseLayerStage.id,
+      vehicleType: 'dump_truck',
+      requiredCount: 2,
+      plannedHours: 8,
+      priority: 'critical',
+      notes: 'Не хватает самосвалов для подвозки щебня под устройство основания.',
+    },
+  });
+
   await prisma.equipmentPlanAssignment.createMany({
     data: [
       {
         siteId: m5Repair.id,
+        stageId: m5MaterialStage.id,
+        demandId: m5DumpDemand.id,
         vehicleId: kamazDump.id,
         workDate: new Date('2026-06-03T00:00:00.000Z'),
         shift: 'day',
@@ -750,6 +915,8 @@ async function main() {
       },
       {
         siteId: m5Repair.id,
+        stageId: m5BarrierStage.id,
+        demandId: m5CraneDemand.id,
         vehicleId: xcmgCrane.id,
         workDate: new Date('2026-06-03T00:00:00.000Z'),
         shift: 'night',
@@ -760,6 +927,8 @@ async function main() {
       },
       {
         siteId: centralStreet.id,
+        stageId: centralSupplyStage.id,
+        demandId: centralVanDemand.id,
         vehicleId: gazelleVan.id,
         workDate: new Date('2026-06-04T00:00:00.000Z'),
         shift: 'night',
@@ -770,6 +939,8 @@ async function main() {
       },
       {
         siteId: potholeProgram.id,
+        stageId: potholeControlStage.id,
+        demandId: potholePickupDemand.id,
         vehicleId: hiluxPickup.id,
         workDate: new Date('2026-06-04T00:00:00.000Z'),
         shift: 'day',
@@ -780,6 +951,8 @@ async function main() {
       },
       {
         siteId: eastBaseRoad.id,
+        stageId: eastBaseLayerStage.id,
+        demandId: eastBaseDumpDemand.id,
         vehicleId: kamazDump.id,
         workDate: new Date('2026-05-29T00:00:00.000Z'),
         shift: 'day',
@@ -791,6 +964,8 @@ async function main() {
       },
       {
         siteId: centralStreet.id,
+        stageId: centralAsphaltStage.id,
+        demandId: centralPickupDemand.id,
         vehicleId: hiluxPickup.id,
         workDate: new Date('2026-05-30T00:00:00.000Z'),
         shift: 'night',

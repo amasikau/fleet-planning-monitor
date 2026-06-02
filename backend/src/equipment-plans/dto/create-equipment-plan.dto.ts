@@ -17,6 +17,14 @@ export class CreateEquipmentPlanDto {
   @IsUUID()
   siteId: string;
 
+  @IsOptional()
+  @IsUUID()
+  stageId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  demandId?: string | null;
+
   @IsUUID()
   vehicleId: string;
 

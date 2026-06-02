@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FleetAuditAction, FleetVehicleStatus, Prisma } from '@prisma/client';
+import {
+  FleetAuditAction,
+  FleetVehicleStatus,
+  FleetVehicleType,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFleetVehicleDto } from './dto/create-fleet-vehicle.dto';
 import { UpdateFleetVehicleDto } from './dto/update-fleet-vehicle.dto';
@@ -47,6 +52,7 @@ export interface FleetVehicleView {
   brand: string;
   model: string;
   plateNumber: string;
+  type: FleetVehicleType;
   status: FleetVehicleViewStatus;
   notes: string;
   assignedDriver: FleetAssignedDriverSummary | null;
@@ -101,6 +107,7 @@ export class FleetService {
       brand: vehicle.brand,
       model: vehicle.model,
       plateNumber: vehicle.plateNumber,
+      type: vehicle.type,
       status: this.mapStatus(vehicle.status),
       notes: vehicle.notes,
       assignedDriver: this.formatDriver(vehicle.assignedDriver),

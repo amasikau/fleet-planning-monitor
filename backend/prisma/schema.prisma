@@ -352,6 +352,31 @@ enum EquipmentPlanStatus {
   failed
 }
 
+enum RoadWorkStageType {
+  preparation
+  earthworks
+  milling
+  base_layer
+  asphalt_paving
+  compaction
+  material_delivery
+  marking
+  maintenance
+}
+
+enum RoadWorkStageStatus {
+  planned
+  in_progress
+  completed
+  delayed
+}
+
+enum EquipmentDemandPriority {
+  normal
+  high
+  critical
+}
+
 model ConstructionSite {
   id              String    @id @default(uuid())
   name            String
@@ -367,9 +392,11 @@ model ConstructionSite {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  vehicles  SiteVehicle[]
-  auditLogs ConstructionSiteAuditLog[]
-  equipmentPlans EquipmentPlanAssignment[]
+  vehicles         SiteVehicle[]
+  auditLogs        ConstructionSiteAuditLog[]
+  equipmentPlans   EquipmentPlanAssignment[]
+  workStages       RoadWorkStage[]
+  equipmentDemands EquipmentDemand[]
 
   @@index([isCompleted])
   @@index([workPeriodEnd])
@@ -405,27 +432,78 @@ model ConstructionSiteAuditLog {
 }
 
 model EquipmentPlanAssignment {
-  id          String              @id @default(uuid())
-  siteId      String
-  site        ConstructionSite    @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  vehicleId   String
-  vehicle     FleetVehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  workDate    DateTime
-  shift       EquipmentPlanShift  @default(day)
+  id           String              @id @default(uuid())
+  siteId       String
+  site         ConstructionSite    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  stageId      String?
+  stage        RoadWorkStage?      @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  demandId     String?
+  demand       EquipmentDemand?    @relation(fields: [demandId], references: [id], onDelete: SetNull)
+  vehicleId    String
+  vehicle      FleetVehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workDate     DateTime
+  shift        EquipmentPlanShift  @default(day)
   plannedHours Int
   actualHours  Int?
-  status      EquipmentPlanStatus @default(planned)
-  notes       String              @default("")
-  createdById String?
-  createdBy   User?              @relation("EquipmentPlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  status       EquipmentPlanStatus @default(planned)
+  notes        String              @default("")
+  createdById  String?
+  createdBy    User?               @relation("EquipmentPlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@unique([vehicleId, workDate, shift])
   @@index([siteId])
+  @@index([stageId])
+  @@index([demandId])
   @@index([vehicleId])
   @@index([workDate])
   @@index([status])
+}
+
+model RoadWorkStage {
+  id        String              @id @default(uuid())
+  siteId    String
+  site      ConstructionSite    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type      RoadWorkStageType
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    RoadWorkStageStatus @default(planned)
+  notes     String              @default("")
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  equipmentDemands EquipmentDemand[]
+  equipmentPlans   EquipmentPlanAssignment[]
+
+  @@index([siteId])
+  @@index([type])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model EquipmentDemand {
+  id            String                  @id @default(uuid())
+  siteId        String
+  site          ConstructionSite        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  stageId       String?
+  stage         RoadWorkStage?          @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  vehicleType   FleetVehicleType
+  requiredCount Int
+  plannedHours  Int                     @default(8)
+  priority      EquipmentDemandPriority @default(normal)
+  notes         String                  @default("")
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  equipmentPlans EquipmentPlanAssignment[]
+
+  @@index([siteId])
+  @@index([stageId])
+  @@index([vehicleType])
+  @@index([priority])
 }
 
 enum NotificationCategory {

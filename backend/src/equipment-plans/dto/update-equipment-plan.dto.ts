@@ -20,6 +20,14 @@ export class UpdateEquipmentPlanDto {
 
   @IsOptional()
   @IsUUID()
+  stageId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  demandId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
   vehicleId?: string;
 
   @IsOptional()

@@ -16,6 +16,9 @@ import type {
   NotificationItem,
   EquipmentPlan,
   EquipmentPlanStats,
+  RoadWorkStage,
+  EquipmentDemand,
+  EquipmentCoverageItem,
 } from "@/lib/types"
 import { translateErrorMessage } from "@/lib/feedback"
 
@@ -182,6 +185,46 @@ export const api = {
       return fetchApi<EquipmentPlan[]>(`/equipment-plans${qs}`)
     },
     getStats: () => fetchApi<EquipmentPlanStats>("/equipment-plans/stats"),
+    getStages: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
+      return fetchApi<RoadWorkStage[]>(`/equipment-plans/stages${qs}`)
+    },
+    createStage: (data: Record<string, unknown>) =>
+      fetchApi<RoadWorkStage>("/equipment-plans/stages", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateStage: (id: string, data: Record<string, unknown>) =>
+      fetchApi<RoadWorkStage>(`/equipment-plans/stages/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteStage: (id: string) =>
+      fetchApi<{ success: boolean }>(`/equipment-plans/stages/${id}`, {
+        method: "DELETE",
+      }),
+    getDemands: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
+      return fetchApi<EquipmentDemand[]>(`/equipment-plans/demands${qs}`)
+    },
+    createDemand: (data: Record<string, unknown>) =>
+      fetchApi<EquipmentDemand>("/equipment-plans/demands", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateDemand: (id: string, data: Record<string, unknown>) =>
+      fetchApi<EquipmentDemand>(`/equipment-plans/demands/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteDemand: (id: string) =>
+      fetchApi<{ success: boolean }>(`/equipment-plans/demands/${id}`, {
+        method: "DELETE",
+      }),
+    getCoverage: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
+      return fetchApi<EquipmentCoverageItem[]>(`/equipment-plans/coverage${qs}`)
+    },
     create: (data: Record<string, unknown>) =>
       fetchApi<EquipmentPlan>("/equipment-plans", {
         method: "POST",
