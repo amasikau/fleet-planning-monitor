@@ -1,0 +1,421 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  admin
+  moderator
+  mechanic
+  driver
+}
+
+enum UserStatus {
+  active
+  blocked
+}
+
+model User {
+  id         String     @id @default(uuid())
+  username   String     @unique
+  password   String
+  lastName   String
+  firstName  String
+  middleName String
+  role       UserRole
+  position   String
+  status     UserStatus @default(active)
+  avatar     String     @default("")
+  isOnline   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  driver               Driver?
+  mechanic             Mechanic?
+  auditLogsTarget      AuditLog[]                 @relation("AuditTarget")
+  auditLogsActor       AuditLog[]                 @relation("AuditActor")
+  driverAuditTarget    DriverAuditLog[]           @relation("DriverAuditTarget")
+  driverAuditActor     DriverAuditLog[]           @relation("DriverAuditActor")
+  mechanicAuditTarget  MechanicAuditLog[]         @relation("MechanicAuditTarget")
+  mechanicAuditActor   MechanicAuditLog[]         @relation("MechanicAuditActor")
+  fleetAuditActions    FleetAuditLog[]            @relation("FleetAuditActor")
+  siteAuditActions     ConstructionSiteAuditLog[] @relation("ConstructionSiteAuditActor")
+  sessions             Session[]
+  fleetServiceJobs     FleetServiceEvent[]        @relation("FleetServiceMechanic")
+  fleetServiceReports  FleetServiceEvent[]        @relation("FleetServiceReporter")
+  fleetServiceWorkLogs FleetServiceWorkLog[]      @relation("FleetServiceWorkLogAuthor")
+  notificationReads    NotificationRead[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  userAgent String   @default("")
+  ip        String   @default("")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+enum AuditAction {
+  login
+  logout
+  block
+  unblock
+  delete
+  edit
+  create
+}
+
+model AuditLog {
+  id            String      @id @default(uuid())
+  timestamp     DateTime    @default(now())
+  action        AuditAction
+  targetUserId  String
+  targetUser    User        @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  performedById String
+  performedBy   User        @relation("AuditActor", fields: [performedById], references: [id], onDelete: Cascade)
+  details       String
+}
+
+enum DrivingCategory {
+  A
+  B
+  C
+  D
+  E
+  BE
+  CE
+  DE
+}
+
+model Driver {
+  id            String            @id @default(uuid())
+  userId        String            @unique
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories    DrivingCategory[]
+  assignedAt    DateTime          @default(now())
+  documents     DriverDocument[]
+  fleetVehicles FleetVehicle[]    @relation("FleetAssignedDriver")
+}
+
+enum DriverDocType {
+  medical
+  license
+}
+
+model DriverDocument {
+  id         String        @id @default(uuid())
+  driverId   String
+  driver     Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  type       DriverDocType
+  fileName   String
+  filePath   String        @default("")
+  uploadedAt DateTime      @default(now())
+}
+
+enum DriverAuditAction {
+  assign
+  doc_upload
+  doc_remove
+  category_change
+  unassign
+}
+
+model DriverAuditLog {
+  id            String            @id @default(uuid())
+  timestamp     DateTime          @default(now())
+  action        DriverAuditAction
+  targetUserId  String
+  targetUser    User              @relation("DriverAuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  performedById String
+  performedBy   User              @relation("DriverAuditActor", fields: [performedById], references: [id], onDelete: Cascade)
+  details       String
+}
+
+/**
+ * ── Mechanic ──
+ */
+
+enum MechanicSpecialization {
+  engine
+  transmission
+  electrical
+  suspension
+  brakes
+  diagnostics
+  bodywork
+  tire_service
+}
+
+enum MechanicDocType {
+  certificate
+  medical
+}
+
+model Mechanic {
+  id              String                   @id @default(uuid())
+  userId          String                   @unique
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specializations MechanicSpecialization[]
+  assignedAt      DateTime                 @default(now())
+  documents       MechanicDocument[]
+}
+
+model MechanicDocument {
+  id         String          @id @default(uuid())
+  mechanicId String
+  mechanic   Mechanic        @relation(fields: [mechanicId], references: [id], onDelete: Cascade)
+  type       MechanicDocType
+  fileName   String
+  filePath   String          @default("")
+  uploadedAt DateTime        @default(now())
+}
+
+enum MechanicAuditAction {
+  assign
+  doc_upload
+  doc_remove
+  specialization_change
+  unassign
+}
+
+model MechanicAuditLog {
+  id            String              @id @default(uuid())
+  timestamp     DateTime            @default(now())
+  action        MechanicAuditAction
+  targetUserId  String
+  targetUser    User                @relation("MechanicAuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  performedById String
+  performedBy   User                @relation("MechanicAuditActor", fields: [performedById], references: [id], onDelete: Cascade)
+  details       String
+}
+
+enum FleetVehicleType {
+  dump_truck
+  crane
+  excavator
+  loader
+  van
+  pickup
+}
+
+enum FleetVehicleStatus {
+  active
+  reserve
+  maintenance
+  repair
+}
+
+enum FleetServiceEventType {
+  maintenance
+  inspection
+  repair
+  insurance
+  diagnostics
+}
+
+enum FleetServiceEventStatus {
+  scheduled
+  in_progress
+  overdue
+  completed
+}
+
+enum FleetAuditAction {
+  create
+  edit
+  delete
+  status_change
+  assign_driver
+  unassign_driver
+}
+
+model FleetVehicle {
+  id                   String             @id @default(uuid())
+  name                 String
+  brand                String
+  model                String
+  plateNumber          String             @unique
+  vin                  String             @unique @default(uuid())
+  type                 FleetVehicleType   @default(pickup)
+  status               FleetVehicleStatus @default(active)
+  previousStatus       FleetVehicleStatus @default(active)
+  year                 Int                @default(2024)
+  odometerKm           Int                @default(0)
+  fuelLevelPercent     Int                @default(100)
+  baseName             String             @default("")
+  currentSite          String             @default("")
+  assignedDriverUserId String?
+  assignedDriver       Driver?            @relation("FleetAssignedDriver", fields: [assignedDriverUserId], references: [userId], onDelete: SetNull)
+  nextMaintenanceAt    DateTime           @default(now())
+  nextMaintenanceKm    Int                @default(0)
+  insuranceExpiresAt   DateTime           @default(now())
+  diagnosticsExpiresAt DateTime           @default(now())
+  notes                String             @default("")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  serviceEvents   FleetServiceEvent[]
+  auditLogs       FleetAuditLog[]
+  siteAssignments SiteVehicle[]
+
+  @@index([status])
+  @@index([type])
+  @@index([assignedDriverUserId])
+}
+
+model FleetServiceEvent {
+  id                String                  @id @default(uuid())
+  vehicleId         String
+  vehicle           FleetVehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type              FleetServiceEventType
+  status            FleetServiceEventStatus
+  title             String
+  dueAt             DateTime?
+  completedAt       DateTime?
+  mileageKm         Int?
+  mechanicId        String?
+  mechanic          User?                   @relation("FleetServiceMechanic", fields: [mechanicId], references: [id], onDelete: SetNull)
+  reportedById      String?
+  reporter          User?                   @relation("FleetServiceReporter", fields: [reportedById], references: [id], onDelete: SetNull)
+  defectDescription String                  @default("")
+  notes             String                  @default("")
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  workLogs          FleetServiceWorkLog[]
+
+  @@index([vehicleId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([mechanicId])
+  @@index([reportedById])
+}
+
+model FleetServiceWorkLog {
+  id          String            @id @default(uuid())
+  eventId     String
+  event       FleetServiceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  performedAt DateTime
+  title       String
+  description String            @default("")
+  mileageKm   Int?
+  createdById String?
+  createdBy   User?             @relation("FleetServiceWorkLogAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+
+  @@index([eventId])
+  @@index([performedAt])
+  @@index([createdById])
+}
+
+model FleetAuditLog {
+  id              String           @id @default(uuid())
+  timestamp       DateTime         @default(now())
+  action          FleetAuditAction
+  targetVehicleId String?
+  targetVehicle   FleetVehicle?    @relation(fields: [targetVehicleId], references: [id], onDelete: SetNull)
+  vehicleLabel    String
+  performedById   String
+  performedBy     User             @relation("FleetAuditActor", fields: [performedById], references: [id], onDelete: Cascade)
+  details         String
+
+  @@index([timestamp])
+  @@index([action])
+  @@index([targetVehicleId])
+}
+
+enum ConstructionSiteAuditAction {
+  create
+  edit
+  delete
+  complete
+  assign_vehicle
+  unassign_vehicle
+}
+
+model ConstructionSite {
+  id              String    @id @default(uuid())
+  name            String
+  workType        String    @default("")
+  address         String    @default("")
+  latitude        Float?
+  longitude       Float?
+  workPeriodStart DateTime  @default(now())
+  workPeriodEnd   DateTime
+  isCompleted     Boolean   @default(false)
+  completedAt     DateTime?
+  notes           String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  vehicles  SiteVehicle[]
+  auditLogs ConstructionSiteAuditLog[]
+
+  @@index([isCompleted])
+  @@index([workPeriodEnd])
+}
+
+model SiteVehicle {
+  id         String           @id @default(uuid())
+  siteId     String
+  site       ConstructionSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  vehicleId  String
+  vehicle    FleetVehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime         @default(now())
+
+  @@unique([siteId, vehicleId])
+  @@index([siteId])
+  @@index([vehicleId])
+}
+
+model ConstructionSiteAuditLog {
+  id            String                      @id @default(uuid())
+  timestamp     DateTime                    @default(now())
+  action        ConstructionSiteAuditAction
+  targetSiteId  String?
+  targetSite    ConstructionSite?           @relation(fields: [targetSiteId], references: [id], onDelete: SetNull)
+  siteLabel     String
+  performedById String
+  performedBy   User                        @relation("ConstructionSiteAuditActor", fields: [performedById], references: [id], onDelete: Cascade)
+  details       String
+
+  @@index([timestamp])
+  @@index([action])
+  @@index([targetSiteId])
+}
+
+enum NotificationCategory {
+  system
+  security
+  action
+}
+
+model Notification {
+  id          String               @id @default(uuid())
+  category    NotificationCategory
+  title       String
+  description String
+  createdAt   DateTime             @default(now())
+
+  reads NotificationRead[]
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+model NotificationRead {
+  id             String       @id @default(uuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+  @@index([userId])
+}
