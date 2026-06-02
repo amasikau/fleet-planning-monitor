@@ -10,6 +10,7 @@ import { ProfileModule } from './profile/profile.module';
 import { SitesModule } from './sites/sites.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { EquipmentPlansModule } from './equipment-plans/equipment-plans.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ServiceEventsModule,
     ProfileModule,
     SitesModule,
+    EquipmentPlansModule,
     UploadsModule,
     NotificationsModule,
   ],

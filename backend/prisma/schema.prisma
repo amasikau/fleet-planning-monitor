@@ -47,6 +47,7 @@ model User {
   fleetServiceJobs     FleetServiceEvent[]        @relation("FleetServiceMechanic")
   fleetServiceReports  FleetServiceEvent[]        @relation("FleetServiceReporter")
   fleetServiceWorkLogs FleetServiceWorkLog[]      @relation("FleetServiceWorkLogAuthor")
+  equipmentPlans       EquipmentPlanAssignment[]  @relation("EquipmentPlanCreatedBy")
   notificationReads    NotificationRead[]
 }
 
@@ -263,6 +264,7 @@ model FleetVehicle {
   serviceEvents   FleetServiceEvent[]
   auditLogs       FleetAuditLog[]
   siteAssignments SiteVehicle[]
+  equipmentPlans  EquipmentPlanAssignment[]
 
   @@index([status])
   @@index([type])
@@ -338,6 +340,18 @@ enum ConstructionSiteAuditAction {
   unassign_vehicle
 }
 
+enum EquipmentPlanShift {
+  day
+  night
+}
+
+enum EquipmentPlanStatus {
+  planned
+  in_progress
+  completed
+  failed
+}
+
 model ConstructionSite {
   id              String    @id @default(uuid())
   name            String
@@ -355,6 +369,7 @@ model ConstructionSite {
 
   vehicles  SiteVehicle[]
   auditLogs ConstructionSiteAuditLog[]
+  equipmentPlans EquipmentPlanAssignment[]
 
   @@index([isCompleted])
   @@index([workPeriodEnd])
@@ -387,6 +402,30 @@ model ConstructionSiteAuditLog {
   @@index([timestamp])
   @@index([action])
   @@index([targetSiteId])
+}
+
+model EquipmentPlanAssignment {
+  id          String              @id @default(uuid())
+  siteId      String
+  site        ConstructionSite    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  vehicle     FleetVehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workDate    DateTime
+  shift       EquipmentPlanShift  @default(day)
+  plannedHours Int
+  actualHours  Int?
+  status      EquipmentPlanStatus @default(planned)
+  notes       String              @default("")
+  createdById String?
+  createdBy   User?              @relation("EquipmentPlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([vehicleId, workDate, shift])
+  @@index([siteId])
+  @@index([vehicleId])
+  @@index([workDate])
+  @@index([status])
 }
 
 enum NotificationCategory {

@@ -160,7 +160,7 @@ export class FleetService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          'Автомобиль с таким госномером уже существует',
+          'Техника с таким госномером уже существует',
         );
       }
       throw error;
@@ -185,7 +185,7 @@ export class FleetService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          'Автомобиль с таким госномером уже существует',
+          'Техника с таким госномером уже существует',
         );
       }
       throw error;
@@ -229,7 +229,7 @@ export class FleetService {
       targetVehicleId: vehicle.id,
       vehicleLabel,
       performedById,
-      details: `Создан автомобиль ${vehicleLabel}`,
+      details: `Создана единица техники ${vehicleLabel}`,
     });
 
     if (assignedDriver) {
@@ -304,7 +304,7 @@ export class FleetService {
         targetVehicleId: updated.id,
         vehicleLabel,
         performedById,
-        details: `Изменены данные автомобиля: ${editedFields.join(', ')}`,
+        details: `Изменены данные техники: ${editedFields.join(', ')}`,
       });
     }
 
@@ -380,7 +380,7 @@ export class FleetService {
       targetVehicleId: existing.id,
       vehicleLabel,
       performedById,
-      details: `Удалён автомобиль ${vehicleLabel}`,
+      details: `Удалена единица техники ${vehicleLabel}`,
     });
 
     await this.prisma.fleetVehicle.delete({ where: { id } });

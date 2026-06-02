@@ -10,6 +10,7 @@ async function main() {
   // Clear existing data
   await prisma.notificationRead.deleteMany();
   await prisma.notification.deleteMany();
+  await prisma.equipmentPlanAssignment.deleteMany();
   await prisma.constructionSiteAuditLog.deleteMany();
   await prisma.siteVehicle.deleteMany();
   await prisma.constructionSite.deleteMany();
@@ -346,7 +347,7 @@ async function main() {
       odometerKm: 84210,
       fuelLevelPercent: 74,
       baseName: 'База Север',
-      currentSite: 'ЖК Северный кластер',
+      currentSite: 'Ремонт трассы М-5, км 34+200 — 42+600',
       assignedDriverUserId: driverKozlov.userId,
       nextMaintenanceAt: new Date('2026-04-18T08:00:00.000Z'),
       nextMaintenanceKm: 85000,
@@ -369,7 +370,7 @@ async function main() {
       odometerKm: 126440,
       fuelLevelPercent: 38,
       baseName: 'База Север',
-      currentSite: 'СТК Речной',
+      currentSite: 'Асфальтирование ул. Центральная',
       assignedDriverUserId: driverSokolov.userId,
       nextMaintenanceAt: new Date('2026-04-09T09:00:00.000Z'),
       nextMaintenanceKm: 127000,
@@ -393,7 +394,7 @@ async function main() {
       odometerKm: 48120,
       fuelLevelPercent: 61,
       baseName: 'База Южная',
-      currentSite: 'Станция МЦД-4',
+      currentSite: 'Фрезерование покрытия на проспекте Мира',
       nextMaintenanceAt: new Date('2026-04-23T10:00:00.000Z'),
       nextMaintenanceKm: 50000,
       insuranceExpiresAt: new Date('2026-04-29T00:00:00.000Z'),
@@ -415,7 +416,7 @@ async function main() {
       odometerKm: 158930,
       fuelLevelPercent: 19,
       baseName: 'База Восток',
-      currentSite: 'Транспортный узел Варшавский',
+      currentSite: 'Устройство основания дороги к промзоне Восток',
       nextMaintenanceAt: new Date('2026-04-05T07:30:00.000Z'),
       nextMaintenanceKm: 158500,
       insuranceExpiresAt: new Date('2026-04-14T00:00:00.000Z'),
@@ -437,7 +438,7 @@ async function main() {
       odometerKm: 19240,
       fuelLevelPercent: 52,
       baseName: 'База Север',
-      currentSite: 'Склад ЗИП',
+      currentSite: 'Резерв снабжения дорожных бригад',
       nextMaintenanceAt: new Date('2026-05-25T08:00:00.000Z'),
       nextMaintenanceKm: 25000,
       insuranceExpiresAt: new Date('2026-07-02T00:00:00.000Z'),
@@ -459,7 +460,7 @@ async function main() {
       odometerKm: 56320,
       fuelLevelPercent: 83,
       baseName: 'База Южная',
-      currentSite: 'ЖК Северный кластер',
+      currentSite: 'Ямочный ремонт городской сети',
       nextMaintenanceAt: new Date('2026-05-06T08:00:00.000Z'),
       nextMaintenanceKm: 60000,
       insuranceExpiresAt: new Date('2026-06-12T00:00:00.000Z'),
@@ -607,7 +608,7 @@ async function main() {
         targetVehicleId: kamazDump.id,
         vehicleLabel: 'КамАЗ 65115 · А412МР 77',
         performedById: admin.id,
-        details: 'Создан автомобиль КамАЗ 65115 · А412МР 77',
+        details: 'Создана единица техники КамАЗ 65115 · А412МР 77',
       },
       {
         timestamp: new Date('2026-04-03T15:40:00.000Z'),
@@ -615,7 +616,7 @@ async function main() {
         targetVehicleId: jcbExcavator.id,
         vehicleLabel: 'JCB JS205 · Е552ВХ 50',
         performedById: admin.id,
-        details: 'Изменены данные автомобиля: примечание',
+        details: 'Изменены данные техники: примечание',
       },
       {
         timestamp: new Date('2026-04-03T11:30:00.000Z'),
@@ -623,7 +624,7 @@ async function main() {
         targetVehicleId: jcbExcavator.id,
         vehicleLabel: 'JCB JS205 · Е552ВХ 50',
         performedById: admin.id,
-        details: 'Создан автомобиль JCB JS205 · Е552ВХ 50',
+        details: 'Создана единица техники JCB JS205 · Е552ВХ 50',
       },
       {
         timestamp: new Date('2026-04-02T16:20:00.000Z'),
@@ -631,7 +632,7 @@ async function main() {
         targetVehicleId: gazelleVan.id,
         vehicleLabel: 'ГАЗ Next A31R32 · С105НЕ 77',
         performedById: admin.id,
-        details: 'Создан автомобиль ГАЗ Next A31R32 · С105НЕ 77',
+        details: 'Создана единица техники ГАЗ Next A31R32 · С105НЕ 77',
       },
       {
         timestamp: new Date('2026-04-02T09:50:00.000Z'),
@@ -647,43 +648,43 @@ async function main() {
         targetVehicleId: shacmanDump.id,
         vehicleLabel: 'Shacman X3000 6x4 · Р918ОС 77',
         performedById: admin.id,
-        details: 'Создан автомобиль Shacman X3000 6x4 · Р918ОС 77',
+        details: 'Создана единица техники Shacman X3000 6x4 · Р918ОС 77',
       },
     ],
   });
 
-  const northernCluster = await prisma.constructionSite.create({
+  const m5Repair = await prisma.constructionSite.create({
     data: {
-      name: 'ЖК Северный кластер',
-      workType: 'Монолитное строительство',
-      address: 'Москва, Ленинградское ш., вл. 45',
+      name: 'Ремонт трассы М-5, км 34+200 — 42+600',
+      workType: 'Капитальный ремонт дорожного покрытия',
+      address: 'Московская обл., участок трассы М-5 Урал',
       latitude: 55.8515,
       longitude: 37.4965,
       workPeriodStart: new Date('2025-10-15T00:00:00.000Z'),
       workPeriodEnd: new Date('2026-04-24T00:00:00.000Z'),
-      notes: 'Монолит завершён, в фокусе фасадные работы и подключение инженерных сетей.',
+      notes: 'Фрезерование старого покрытия завершено, идёт вывоз материала и подготовка основания.',
     },
   });
 
-  const riverTerminal = await prisma.constructionSite.create({
+  const centralStreet = await prisma.constructionSite.create({
     data: {
-      name: 'СТК Речной',
-      workType: 'Реконструкция терминала',
-      address: 'Москва, ул. Лодочная, 18',
+      name: 'Асфальтирование ул. Центральная',
+      workType: 'Укладка асфальтобетонного покрытия',
+      address: 'Москва, ул. Центральная',
       latitude: 55.8547,
       longitude: 37.4734,
       workPeriodStart: new Date('2025-11-03T00:00:00.000Z'),
       workPeriodEnd: new Date('2026-05-18T00:00:00.000Z'),
       notes:
-        'Работы приостановлены до выпуска корректировки по транспортной схеме въездной группы.',
+        'Требуется синхронизировать поставку смеси, работу катков и ночные ограничения движения.',
     },
   });
 
-  const mcdStation = await prisma.constructionSite.create({
+  const avenueMilling = await prisma.constructionSite.create({
     data: {
-      name: 'Станция МЦД-4',
-      workType: 'Инфраструктурное строительство',
-      address: 'Москва, ул. Южная, 14',
+      name: 'Фрезерование покрытия на проспекте Мира',
+      workType: 'Фрезерование и подготовка карты ремонта',
+      address: 'Москва, проспект Мира, участок 112–128',
       latitude: 55.6128,
       longitude: 37.7440,
       workPeriodStart: new Date('2024-08-01T00:00:00.000Z'),
@@ -691,47 +692,113 @@ async function main() {
       isCompleted: true,
       completedAt: new Date('2026-03-28T00:00:00.000Z'),
       notes:
-        'Объект передан заказчику, в работе закрывающий пакет исполнительной документации.',
+        'Участок завершён, исполнительная документация передана заказчику.',
     },
   });
 
-  const school2148 = await prisma.constructionSite.create({
+  const potholeProgram = await prisma.constructionSite.create({
     data: {
-      name: 'Школа 2148',
-      workType: 'Капитальное строительство',
-      address: 'Москва, ул. Академика Королёва, 77',
+      name: 'Ямочный ремонт городской сети',
+      workType: 'Локальный ремонт покрытия',
+      address: 'Москва, Северный административный округ',
       latitude: 55.8234,
       longitude: 37.6152,
       workPeriodStart: new Date('2026-01-12T00:00:00.000Z'),
       workPeriodEnd: new Date('2026-08-28T00:00:00.000Z'),
       notes:
-        'Идут внутренние инженерные системы, параллельно готовится благоустройство двора.',
+        'Работы выполняются малыми звеньями, требуется ежедневное распределение техники по адресам.',
     },
   });
 
-  const logisticsPark = await prisma.constructionSite.create({
+  const eastBaseRoad = await prisma.constructionSite.create({
     data: {
-      name: 'Логистический парк Восток',
-      workType: 'Строительство склада',
-      address: 'Московская обл., Балашиха, ш. Энтузиастов, 1',
+      name: 'Дорога к промзоне Восток',
+      workType: 'Устройство основания дорожной одежды',
+      address: 'Московская обл., Балашиха, промзона Восток',
       latitude: 55.7960,
       longitude: 37.9570,
       workPeriodStart: new Date('2026-03-10T00:00:00.000Z'),
       workPeriodEnd: new Date('2027-02-15T00:00:00.000Z'),
       notes:
-        'Завершается подготовка стройгородка и графика поставок металлоконструкций.',
+        'Идёт отсыпка основания, критична доступность самосвалов и погрузчика.',
     },
   });
 
   // Assign vehicles to sites
   await prisma.siteVehicle.createMany({
     data: [
-      { siteId: northernCluster.id, vehicleId: kamazDump.id },
-      { siteId: northernCluster.id, vehicleId: xcmgCrane.id },
-      { siteId: northernCluster.id, vehicleId: jcbExcavator.id },
-      { siteId: school2148.id, vehicleId: shacmanDump.id },
-      { siteId: school2148.id, vehicleId: gazelleVan.id },
-      { siteId: logisticsPark.id, vehicleId: hiluxPickup.id },
+      { siteId: m5Repair.id, vehicleId: kamazDump.id },
+      { siteId: m5Repair.id, vehicleId: xcmgCrane.id },
+      { siteId: m5Repair.id, vehicleId: jcbExcavator.id },
+      { siteId: potholeProgram.id, vehicleId: shacmanDump.id },
+      { siteId: potholeProgram.id, vehicleId: gazelleVan.id },
+      { siteId: eastBaseRoad.id, vehicleId: hiluxPickup.id },
+    ],
+  });
+
+  await prisma.equipmentPlanAssignment.createMany({
+    data: [
+      {
+        siteId: m5Repair.id,
+        vehicleId: kamazDump.id,
+        workDate: new Date('2026-06-03T00:00:00.000Z'),
+        shift: 'day',
+        plannedHours: 8,
+        status: 'planned',
+        notes: 'Вывоз фрезерованного покрытия с участка 34+200 — 36+000.',
+        createdById: admin.id,
+      },
+      {
+        siteId: m5Repair.id,
+        vehicleId: xcmgCrane.id,
+        workDate: new Date('2026-06-03T00:00:00.000Z'),
+        shift: 'night',
+        plannedHours: 6,
+        status: 'planned',
+        notes: 'Монтаж временных барьерных ограждений.',
+        createdById: petrov.id,
+      },
+      {
+        siteId: centralStreet.id,
+        vehicleId: gazelleVan.id,
+        workDate: new Date('2026-06-04T00:00:00.000Z'),
+        shift: 'night',
+        plannedHours: 8,
+        status: 'in_progress',
+        notes: 'Снабжение ночной бригады и доставка знаков.',
+        createdById: petrov.id,
+      },
+      {
+        siteId: potholeProgram.id,
+        vehicleId: hiluxPickup.id,
+        workDate: new Date('2026-06-04T00:00:00.000Z'),
+        shift: 'day',
+        plannedHours: 8,
+        status: 'planned',
+        notes: 'Объезд адресов и контроль закрытия карт ремонта.',
+        createdById: sidorova.id,
+      },
+      {
+        siteId: eastBaseRoad.id,
+        vehicleId: kamazDump.id,
+        workDate: new Date('2026-05-29T00:00:00.000Z'),
+        shift: 'day',
+        plannedHours: 8,
+        actualHours: 7,
+        status: 'completed',
+        notes: 'Доставка щебня для основания.',
+        createdById: admin.id,
+      },
+      {
+        siteId: centralStreet.id,
+        vehicleId: hiluxPickup.id,
+        workDate: new Date('2026-05-30T00:00:00.000Z'),
+        shift: 'night',
+        plannedHours: 6,
+        status: 'failed',
+        notes: 'Смена сорвана из-за задержки поставки асфальтобетонной смеси.',
+        createdById: petrov.id,
+      },
     ],
   });
 
@@ -740,90 +807,90 @@ async function main() {
       {
         timestamp: new Date('2026-04-06T17:40:00.000Z'),
         action: 'assign_vehicle',
-        targetSiteId: northernCluster.id,
-        siteLabel: 'ЖК Северный кластер',
+        targetSiteId: m5Repair.id,
+        siteLabel: 'Ремонт трассы М-5',
         performedById: petrov.id,
         details: 'Назначена техника: XCMG XCA60 (К 789 АО 77)',
       },
       {
         timestamp: new Date('2026-04-06T10:20:00.000Z'),
         action: 'edit',
-        targetSiteId: riverTerminal.id,
-        siteLabel: 'СТК Речной',
+        targetSiteId: centralStreet.id,
+        siteLabel: 'Асфальтирование ул. Центральная',
         performedById: admin.id,
         details: 'Изменены данные объекта: примечание',
       },
       {
         timestamp: new Date('2026-04-05T13:10:00.000Z'),
         action: 'edit',
-        targetSiteId: school2148.id,
-        siteLabel: 'Школа 2148',
+        targetSiteId: potholeProgram.id,
+        siteLabel: 'Ямочный ремонт городской сети',
         performedById: sidorova.id,
         details: 'Изменены данные объекта: примечание, вид работ',
       },
       {
         timestamp: new Date('2026-04-04T16:50:00.000Z'),
         action: 'assign_vehicle',
-        targetSiteId: school2148.id,
-        siteLabel: 'Школа 2148',
+        targetSiteId: potholeProgram.id,
+        siteLabel: 'Ямочный ремонт городской сети',
         performedById: admin.id,
         details: 'Назначена техника: Shacman X3000 (Т 654 СА 50)',
       },
       {
         timestamp: new Date('2026-04-04T16:20:00.000Z'),
         action: 'create',
-        targetSiteId: school2148.id,
-        siteLabel: 'Школа 2148',
+        targetSiteId: potholeProgram.id,
+        siteLabel: 'Ямочный ремонт городской сети',
         performedById: admin.id,
-        details: 'Создан объект «Школа 2148»',
+        details: 'Создан объект «Ямочный ремонт городской сети»',
       },
       {
         timestamp: new Date('2026-04-03T12:45:00.000Z'),
         action: 'assign_vehicle',
-        targetSiteId: northernCluster.id,
-        siteLabel: 'ЖК Северный кластер',
+        targetSiteId: m5Repair.id,
+        siteLabel: 'Ремонт трассы М-5',
         performedById: admin.id,
         details: 'Назначена техника: КамАЗ 6520 (А 123 ВС 77)',
       },
       {
         timestamp: new Date('2026-04-03T12:10:00.000Z'),
         action: 'create',
-        targetSiteId: northernCluster.id,
-        siteLabel: 'ЖК Северный кластер',
+        targetSiteId: m5Repair.id,
+        siteLabel: 'Ремонт трассы М-5',
         performedById: admin.id,
-        details: 'Создан объект «ЖК Северный кластер»',
+        details: 'Создан объект «Ремонт трассы М-5, км 34+200 — 42+600»',
       },
       {
         timestamp: new Date('2026-04-02T15:30:00.000Z'),
         action: 'complete',
-        targetSiteId: mcdStation.id,
-        siteLabel: 'Станция МЦД-4',
+        targetSiteId: avenueMilling.id,
+        siteLabel: 'Фрезерование покрытия на проспекте Мира',
         performedById: admin.id,
-        details: 'Объект «Станция МЦД-4» завершён',
+        details: 'Объект «Фрезерование покрытия на проспекте Мира» завершён',
       },
       {
         timestamp: new Date('2026-04-02T15:00:00.000Z'),
         action: 'create',
-        targetSiteId: riverTerminal.id,
-        siteLabel: 'СТК Речной',
+        targetSiteId: centralStreet.id,
+        siteLabel: 'Асфальтирование ул. Центральная',
         performedById: admin.id,
-        details: 'Создан объект «СТК Речной»',
+        details: 'Создан объект «Асфальтирование ул. Центральная»',
       },
       {
         timestamp: new Date('2026-04-01T11:10:00.000Z'),
         action: 'create',
-        targetSiteId: logisticsPark.id,
-        siteLabel: 'Логистический парк Восток',
+        targetSiteId: eastBaseRoad.id,
+        siteLabel: 'Дорога к промзоне Восток',
         performedById: admin.id,
-        details: 'Создан объект «Логистический парк Восток»',
+        details: 'Создан объект «Дорога к промзоне Восток»',
       },
       {
         timestamp: new Date('2026-03-30T18:00:00.000Z'),
         action: 'create',
-        targetSiteId: mcdStation.id,
-        siteLabel: 'Станция МЦД-4',
+        targetSiteId: avenueMilling.id,
+        siteLabel: 'Фрезерование покрытия на проспекте Мира',
         performedById: admin.id,
-        details: 'Создан объект «Станция МЦД-4»',
+        details: 'Создан объект «Фрезерование покрытия на проспекте Мира»',
       },
     ],
   });
