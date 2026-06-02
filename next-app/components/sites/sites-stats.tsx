@@ -1,0 +1,81 @@
+"use client"
+
+import type { ConstructionSite } from "@/lib/types"
+import { Card, CardContent } from "@/components/ui/card"
+import { HugeiconsIcon } from "@hugeicons/react"
+import {
+  Building06Icon,
+  CheckmarkBadge01Icon,
+  Car01Icon,
+  HardDriveIcon,
+} from "@hugeicons/core-free-icons"
+
+export function SitesStats({
+  activeSites,
+  archivedSites,
+}: {
+  activeSites: ConstructionSite[]
+  archivedSites: ConstructionSite[]
+}) {
+  const totalVehicles = [...activeSites, ...archivedSites].reduce(
+    (sum, s) => sum + s.vehicleCount,
+    0
+  )
+
+  const stats = [
+    {
+      label: "Всего объектов",
+      value: activeSites.length + archivedSites.length,
+      icon: Building06Icon,
+      iconClass: "text-primary",
+      bgClass: "bg-primary/12",
+    },
+    {
+      label: "В работе",
+      value: activeSites.length,
+      icon: HardDriveIcon,
+      iconClass: "text-emerald-600",
+      bgClass: "bg-emerald-500/12",
+    },
+    {
+      label: "Завершено",
+      value: archivedSites.length,
+      icon: CheckmarkBadge01Icon,
+      iconClass: "text-sky-600",
+      bgClass: "bg-sky-500/12",
+    },
+    {
+      label: "Единиц техники",
+      value: totalVehicles,
+      icon: Car01Icon,
+      iconClass: "text-amber-600",
+      bgClass: "bg-amber-500/12",
+    },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
+      {stats.map((stat) => (
+        <Card key={stat.label}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${stat.bgClass}`}
+            >
+              <HugeiconsIcon
+                icon={stat.icon}
+                strokeWidth={2}
+                className={`size-5 ${stat.iconClass}`}
+              />
+            </div>
+            <div>
+              <p className="text-2xl font-bold tabular-nums leading-none">
+                {stat.value}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
