@@ -226,6 +226,7 @@ export class FleetService {
       model: dto.model,
       name: `${dto.brand} ${dto.model}`,
       plateNumber: dto.plateNumber,
+      type: dto.type,
       status: dto.status,
       notes: dto.notes ?? '',
       assignedDriverUserId: assignedDriver?.userId ?? null,
@@ -282,6 +283,7 @@ export class FleetService {
       model: dto.model,
       name: dto.brand || dto.model ? `${nextBrand} ${nextModel}` : undefined,
       plateNumber: dto.plateNumber,
+      type: dto.type,
       status: dto.status,
       notes: dto.notes,
       assignedDriverUserId: driverFieldProvided
@@ -301,6 +303,7 @@ export class FleetService {
     if (dto.plateNumber && dto.plateNumber !== existing.plateNumber) {
       editedFields.push('госномер');
     }
+    if (dto.type && dto.type !== existing.type) editedFields.push('тип техники');
     if (dto.notes !== undefined && dto.notes !== existing.notes) {
       editedFields.push('примечание');
     }

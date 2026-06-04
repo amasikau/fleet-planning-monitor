@@ -1,0 +1,9 @@
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'bulldozer';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'tractor';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'asphalt_paver';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'road_roller';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'motor_grader';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'truck_tractor';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'flatbed_truck';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'semi_trailer';
+ALTER TYPE "FleetVehicleType" ADD VALUE IF NOT EXISTS 'passenger_car';

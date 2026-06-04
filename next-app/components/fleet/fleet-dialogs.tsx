@@ -1,8 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import type { Driver, FleetVehicle, FleetVehicleStatus } from "@/lib/types"
-import { FLEET_VEHICLE_STATUS_LABELS } from "@/lib/types"
+import type {
+  Driver,
+  FleetVehicle,
+  FleetVehicleStatus,
+  FleetVehicleType,
+} from "@/lib/types"
+import {
+  FLEET_VEHICLE_STATUS_LABELS,
+  FLEET_VEHICLE_TYPE_LABELS,
+} from "@/lib/types"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -25,6 +33,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -45,6 +54,7 @@ export interface FleetVehicleFormValues {
   brand: string
   model: string
   plateNumber: string
+  type: FleetVehicleType
   status: FleetVehicleStatus
   assignedDriverUserId: string | null
   notes: string
@@ -61,6 +71,7 @@ function createInitialForm(
     brand: vehicle?.brand ?? "",
     model: vehicle?.model ?? "",
     plateNumber: vehicle?.plateNumber ?? "",
+    type: vehicle?.type ?? "dump_truck",
     status: vehicle?.status ?? "reserve",
     assignedDriverUserId: vehicle?.assignedDriver?.userId ?? null,
     notes: vehicle?.notes ?? "",
@@ -168,9 +179,41 @@ export function FleetVehicleDialog({
                   plateNumber: event.target.value,
                 }))
               }
-              placeholder="А123АА 77"
+              placeholder="1234 AB-7"
               className="h-9"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Тип транспортного средства
+            </label>
+            <Select
+              value={form.type}
+              onValueChange={(value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  type: value as FleetVehicleType,
+                }))
+              }
+            >
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectGroup>
+                  {(
+                    Object.entries(FLEET_VEHICLE_TYPE_LABELS) as [
+                      FleetVehicleType,
+                      string,
+                    ][]
+                  ).map(([type, label]) => (
+                    <SelectItem key={type} value={type}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -189,17 +232,19 @@ export function FleetVehicleDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(
-                  Object.keys(
-                    FLEET_VEHICLE_STATUS_LABELS
-                  ) as FleetVehicleStatus[]
-                )
-                  .filter((status) => status !== "repair")
-                  .map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {FLEET_VEHICLE_STATUS_LABELS[status]}
-                    </SelectItem>
-                  ))}
+                <SelectGroup>
+                  {(
+                    Object.keys(
+                      FLEET_VEHICLE_STATUS_LABELS
+                    ) as FleetVehicleStatus[]
+                  )
+                    .filter((status) => status !== "repair")
+                    .map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {FLEET_VEHICLE_STATUS_LABELS[status]}
+                      </SelectItem>
+                    ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -221,21 +266,23 @@ export function FleetVehicleDialog({
                 <SelectValue placeholder="Без закрепления" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={EMPTY_DRIVER_VALUE}>
-                  Не закреплять
-                </SelectItem>
-                {drivers.map((driver) => (
-                  <SelectItem key={driver.userId} value={driver.userId}>
-                    <span className="flex items-center gap-2">
-                      <HugeiconsIcon
-                        icon={ContainerTruckIcon}
-                        strokeWidth={1.8}
-                        className="size-4 text-muted-foreground"
-                      />
-                      <span>{getDriverLabel(driver)}</span>
-                    </span>
+                <SelectGroup>
+                  <SelectItem value={EMPTY_DRIVER_VALUE}>
+                    Не закреплять
                   </SelectItem>
-                ))}
+                  {drivers.map((driver) => (
+                    <SelectItem key={driver.userId} value={driver.userId}>
+                      <span className="flex items-center gap-2">
+                        <HugeiconsIcon
+                          icon={ContainerTruckIcon}
+                          strokeWidth={1.8}
+                          className="size-4 text-muted-foreground"
+                        />
+                        <span>{getDriverLabel(driver)}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

@@ -239,15 +239,33 @@ export type FleetVehicleType =
   | "dump_truck"
   | "crane"
   | "excavator"
+  | "bulldozer"
+  | "tractor"
   | "loader"
+  | "asphalt_paver"
+  | "road_roller"
+  | "motor_grader"
+  | "truck_tractor"
+  | "flatbed_truck"
+  | "semi_trailer"
+  | "passenger_car"
   | "van"
   | "pickup"
 
 export const FLEET_VEHICLE_TYPE_LABELS: Record<FleetVehicleType, string> = {
-  dump_truck: "Самосвал",
+  dump_truck: "Грузовой самосвал",
   crane: "Автокран",
   excavator: "Экскаватор",
-  loader: "Погрузчик",
+  bulldozer: "Бульдозер",
+  tractor: "Трактор",
+  loader: "Погрузчик фронтальный",
+  asphalt_paver: "Асфальтоукладчик",
+  road_roller: "Каток дорожный",
+  motor_grader: "Автогрейдер",
+  truck_tractor: "Грузовой седельный тягач",
+  flatbed_truck: "Грузовой бортовой",
+  semi_trailer: "Полуприцеп",
+  passenger_car: "Легковой автомобиль",
   van: "Фургон снабжения",
   pickup: "Пикап",
 }

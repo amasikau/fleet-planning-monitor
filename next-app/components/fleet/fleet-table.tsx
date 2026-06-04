@@ -25,8 +25,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { FleetVehicle, FleetVehicleStatus, Driver } from "@/lib/types"
-import { FLEET_VEHICLE_STATUS_LABELS } from "@/lib/types"
+import type {
+  FleetVehicle,
+  FleetVehicleStatus,
+  Driver,
+} from "@/lib/types"
+import {
+  FLEET_VEHICLE_STATUS_LABELS,
+  FLEET_VEHICLE_TYPE_LABELS,
+} from "@/lib/types"
 import {
   FleetVehicleDialog,
   DeleteFleetVehicleDialog,
@@ -63,7 +70,13 @@ const statusStyles: Record<FleetVehicle["status"], string> = {
   repair: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
 }
 
-type SortKey = "brand" | "model" | "plateNumber" | "assignedDriver" | "updatedAt"
+type SortKey =
+  | "brand"
+  | "model"
+  | "type"
+  | "plateNumber"
+  | "assignedDriver"
+  | "updatedAt"
 type SortDir = "asc" | "desc"
 
 function formatDate(value: string) {
@@ -124,6 +137,7 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
         (v) =>
           v.brand.toLowerCase().includes(q) ||
           v.model.toLowerCase().includes(q) ||
+          FLEET_VEHICLE_TYPE_LABELS[v.type].toLowerCase().includes(q) ||
           v.plateNumber.toLowerCase().includes(q) ||
           (v.assignedDriver?.fullName ?? "").toLowerCase().includes(q) ||
           (v.assignedDriver?.username ?? "").toLowerCase().includes(q) ||
@@ -140,6 +154,9 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
       if (sortKey === "assignedDriver") {
         av = a.assignedDriver?.fullName ?? ""
         bv = b.assignedDriver?.fullName ?? ""
+      } else if (sortKey === "type") {
+        av = FLEET_VEHICLE_TYPE_LABELS[a.type]
+        bv = FLEET_VEHICLE_TYPE_LABELS[b.type]
       } else {
         av = String(a[sortKey] ?? "")
         bv = String(b[sortKey] ?? "")
@@ -241,6 +258,13 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
                     {renderSortIcon("model")}
                   </span>
                 </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("type")}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <HugeiconsIcon icon={Car01Icon} strokeWidth={2} className="size-3.5 text-muted-foreground" />
+                    Тип ТС
+                    {renderSortIcon("type")}
+                  </span>
+                </TableHead>
                 <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("plateNumber")}>
                   <span className="inline-flex items-center gap-1.5">
                     <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" />
@@ -301,7 +325,7 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={readonly ? 7 : 8} className="h-24 text-center text-muted-foreground">
                     Ничего не найдено
                   </TableCell>
                 </TableRow>
@@ -312,6 +336,11 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
                       {vehicle.brand}
                     </TableCell>
                     <TableCell>{vehicle.model}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="max-w-48 truncate rounded-full px-2 py-0 text-[10px]">
+                        {FLEET_VEHICLE_TYPE_LABELS[vehicle.type]}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px]">
                         {vehicle.plateNumber}

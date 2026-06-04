@@ -1,4 +1,4 @@
-import { FleetVehicleStatus } from '@prisma/client';
+import { FleetVehicleStatus, FleetVehicleType } from '@prisma/client';
 import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateFleetVehicleDto {
@@ -10,6 +10,9 @@ export class CreateFleetVehicleDto {
 
   @IsString()
   plateNumber: string;
+
+  @IsEnum(FleetVehicleType)
+  type: FleetVehicleType;
 
   @IsEnum(FleetVehicleStatus)
   status: FleetVehicleStatus;

@@ -1,7 +1,10 @@
 "use client"
 
 import type { FleetVehicle } from "@/lib/types"
-import { FLEET_VEHICLE_STATUS_LABELS } from "@/lib/types"
+import {
+  FLEET_VEHICLE_STATUS_LABELS,
+  FLEET_VEHICLE_TYPE_LABELS,
+} from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -114,12 +117,20 @@ export function FleetCardGrid({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <Badge
-                  variant="secondary"
-                  className="rounded-full px-2 py-0 text-[10px]"
-                >
-                  {vehicle.plateNumber}
-                </Badge>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full px-2 py-0 text-[10px]"
+                  >
+                    {vehicle.plateNumber}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="max-w-48 truncate rounded-full px-2 py-0 text-[10px]"
+                  >
+                    {FLEET_VEHICLE_TYPE_LABELS[vehicle.type]}
+                  </Badge>
+                </div>
                 <Badge
                   variant="secondary"
                   className={`border-0 ${statusStyles[vehicle.status]}`}

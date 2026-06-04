@@ -200,7 +200,16 @@ enum FleetVehicleType {
   dump_truck
   crane
   excavator
+  bulldozer
+  tractor
   loader
+  asphalt_paver
+  road_roller
+  motor_grader
+  truck_tractor
+  flatbed_truck
+  semi_trailer
+  passenger_car
   van
   pickup
 }
