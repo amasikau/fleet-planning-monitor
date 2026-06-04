@@ -3,13 +3,36 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { FleetVehicleType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignMechanicDto } from './dto/assign-mechanic.dto';
 import { UpdateMechanicDto } from './dto/update-mechanic.dto';
 
+const fleetVehicleTypeLabels: Record<FleetVehicleType, string> = {
+  dump_truck: 'Грузовой самосвал',
+  crane: 'Автокран',
+  excavator: 'Экскаватор',
+  bulldozer: 'Бульдозер',
+  tractor: 'Трактор',
+  loader: 'Погрузчик фронтальный',
+  asphalt_paver: 'Асфальтоукладчик',
+  road_roller: 'Каток дорожный',
+  motor_grader: 'Автогрейдер',
+  truck_tractor: 'Грузовой седельный тягач',
+  flatbed_truck: 'Грузовой бортовой',
+  semi_trailer: 'Полуприцеп',
+  passenger_car: 'Легковой автомобиль',
+  van: 'Фургон снабжения',
+  pickup: 'Пикап',
+};
+
 @Injectable()
 export class MechanicsService {
   constructor(private prisma: PrismaService) {}
+
+  private formatVehicleTypes(vehicleTypes: FleetVehicleType[]) {
+    return vehicleTypes.map((type) => fleetVehicleTypeLabels[type]).join(', ');
+  }
 
   private formatMechanic(mechanic: any) {
     return {
@@ -19,7 +42,7 @@ export class MechanicsService {
       firstName: mechanic.user.firstName,
       middleName: mechanic.user.middleName,
       position: mechanic.user.position,
-      specializations: mechanic.specializations,
+      vehicleTypes: mechanic.vehicleTypes,
       documents: mechanic.documents.map((d: any) => ({
         type: d.type,
         fileName: d.fileName,
@@ -89,7 +112,8 @@ export class MechanicsService {
     const mechanic = await this.prisma.mechanic.create({
       data: {
         userId: dto.userId,
-        specializations: dto.specializations,
+        specializations: [],
+        vehicleTypes: dto.vehicleTypes,
         documents: {
           create: (dto.documents || []).map((doc) => ({
             type: doc.type,
@@ -106,7 +130,7 @@ export class MechanicsService {
         action: 'assign',
         targetUserId: dto.userId,
         performedById,
-        details: `Назначен механиком со специализациями: ${dto.specializations.join(', ')}`,
+        details: `Назначен механиком с допуском к технике: ${this.formatVehicleTypes(dto.vehicleTypes)}`,
       },
     });
 
@@ -137,15 +161,15 @@ export class MechanicsService {
 
     const updateData: any = {};
 
-    if (dto.specializations) {
-      updateData.specializations = dto.specializations;
+    if (dto.vehicleTypes) {
+      updateData.vehicleTypes = dto.vehicleTypes;
 
       await this.prisma.mechanicAuditLog.create({
         data: {
-          action: 'specialization_change',
+          action: 'vehicle_type_change',
           targetUserId: userId,
           performedById,
-          details: `Изменены специализации: ${dto.specializations.join(', ')}`,
+          details: `Изменён допуск к технике: ${this.formatVehicleTypes(dto.vehicleTypes)}`,
         },
       });
     }

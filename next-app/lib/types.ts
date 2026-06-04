@@ -123,41 +123,6 @@ export interface DriverAuditEntry {
 
 /* ── Mechanic-specific types ── */
 
-export type MechanicSpecialization =
-  | "engine"
-  | "transmission"
-  | "electrical"
-  | "suspension"
-  | "brakes"
-  | "diagnostics"
-  | "bodywork"
-  | "tire_service"
-
-export const MECHANIC_SPECIALIZATIONS: MechanicSpecialization[] = [
-  "engine",
-  "transmission",
-  "electrical",
-  "suspension",
-  "brakes",
-  "diagnostics",
-  "bodywork",
-  "tire_service",
-]
-
-export const MECHANIC_SPECIALIZATION_LABELS: Record<
-  MechanicSpecialization,
-  string
-> = {
-  engine: "Двигатель",
-  transmission: "Трансмиссия",
-  electrical: "Электрика",
-  suspension: "Подвеска",
-  brakes: "Тормоза",
-  diagnostics: "Диагностика",
-  bodywork: "Кузовные работы",
-  tire_service: "Шиномонтаж",
-}
-
 export type MechanicDocType = "certificate" | "medical"
 
 export const MECHANIC_DOC_LABELS: Record<MechanicDocType, string> = {
@@ -179,7 +144,7 @@ export interface Mechanic {
   firstName: string
   middleName: string
   position: string
-  specializations: MechanicSpecialization[]
+  vehicleTypes: FleetVehicleType[]
   documents: MechanicDocument[]
   assignedAt: string
 }
@@ -189,13 +154,15 @@ export type MechanicAuditAction =
   | "doc_upload"
   | "doc_remove"
   | "specialization_change"
+  | "vehicle_type_change"
   | "unassign"
 
 export const MECHANIC_AUDIT_LABELS: Record<MechanicAuditAction, string> = {
   assign: "Назначение",
   doc_upload: "Загрузка документа",
   doc_remove: "Удаление документа",
-  specialization_change: "Изменение специализаций",
+  specialization_change: "Изменение допуска техники",
+  vehicle_type_change: "Изменение допуска техники",
   unassign: "Снятие назначения",
 }
 
@@ -251,6 +218,24 @@ export type FleetVehicleType =
   | "passenger_car"
   | "van"
   | "pickup"
+
+export const FLEET_VEHICLE_TYPES: FleetVehicleType[] = [
+  "dump_truck",
+  "crane",
+  "excavator",
+  "bulldozer",
+  "tractor",
+  "loader",
+  "asphalt_paver",
+  "road_roller",
+  "motor_grader",
+  "truck_tractor",
+  "flatbed_truck",
+  "semi_trailer",
+  "passenger_car",
+  "van",
+  "pickup",
+]
 
 export const FLEET_VEHICLE_TYPE_LABELS: Record<FleetVehicleType, string> = {
   dump_truck: "Грузовой самосвал",

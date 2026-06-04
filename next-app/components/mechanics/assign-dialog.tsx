@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import type { User, MechanicSpecialization } from "@/lib/types"
-import { MECHANIC_SPECIALIZATIONS, MECHANIC_SPECIALIZATION_LABELS, USER_ROLE_LABELS } from "@/lib/types"
+import { VehicleTypePermissionPicker } from "@/components/mechanics/vehicle-type-permission-picker"
+import type { FleetVehicleType, User } from "@/lib/types"
+import { USER_ROLE_LABELS } from "@/lib/types"
 import { api } from "@/lib/api"
 import { getErrorMessage } from "@/lib/feedback"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -20,7 +21,6 @@ import {
   MedicalFileIcon,
   Certificate01Icon,
   UserAdd01Icon,
-  CheckmarkBadge01Icon,
   Cancel01Icon,
   Loading03Icon,
   Settings02Icon,
@@ -36,11 +36,11 @@ interface AssignMechanicDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   user: User
-  onAssign: (data: { userId: string; specializations: MechanicSpecialization[]; documents: { type: string; fileName: string; filePath: string }[] }) => void
+  onAssign: (data: { userId: string; vehicleTypes: FleetVehicleType[]; documents: { type: string; fileName: string; filePath: string }[] }) => void
 }
 
 export function AssignMechanicDialog({ open, onOpenChange, user, onAssign }: AssignMechanicDialogProps) {
-  const [specializations, setSpecializations] = useState<MechanicSpecialization[]>([])
+  const [vehicleTypes, setVehicleTypes] = useState<FleetVehicleType[]>([])
   const [certificateDoc, setCertificateDoc] = useState<UploadedDoc | null>(null)
   const [medicalDoc, setMedicalDoc] = useState<UploadedDoc | null>(null)
   const [uploading, setUploading] = useState<"certificate" | "medical" | null>(null)
@@ -50,17 +50,11 @@ export function AssignMechanicDialog({ open, onOpenChange, user, onAssign }: Ass
 
   const wrappedOnOpenChange = (v: boolean) => {
     if (!v) {
-      setSpecializations([])
+      setVehicleTypes([])
       setCertificateDoc(null)
       setMedicalDoc(null)
     }
     onOpenChange(v)
-  }
-
-  const toggleSpecialization = (spec: MechanicSpecialization) => {
-    setSpecializations((prev) =>
-      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
-    )
   }
 
   const handleUpload = useCallback(async (file: File, docType: "certificate" | "medical") => {
@@ -99,11 +93,11 @@ export function AssignMechanicDialog({ open, onOpenChange, user, onAssign }: Ass
     e.stopPropagation()
   }
 
-  const canAssign = specializations.length > 0
+  const canAssign = vehicleTypes.length > 0
 
   const handleAssign = () => {
-    if (specializations.length === 0) {
-      toast.error("Выберите хотя бы одну специализацию")
+    if (vehicleTypes.length === 0) {
+      toast.error("Выберите хотя бы один тип техники")
       return
     }
 
@@ -111,7 +105,7 @@ export function AssignMechanicDialog({ open, onOpenChange, user, onAssign }: Ass
     if (certificateDoc) documents.push(certificateDoc)
     if (medicalDoc) documents.push(medicalDoc)
 
-    onAssign({ userId: user.id, specializations, documents })
+    onAssign({ userId: user.id, vehicleTypes, documents })
   }
 
   const initials = `${user.lastName[0] ?? ""}${user.firstName[0] ?? ""}`
@@ -149,34 +143,20 @@ export function AssignMechanicDialog({ open, onOpenChange, user, onAssign }: Ass
           </div>
         </div>
 
-        {/* Specializations */}
+        {/* Vehicle type permissions */}
         <div>
           <label className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} className="size-4 text-muted-foreground" />
-            Специализации <span className="text-destructive">*</span>
+            Типы техники <span className="text-destructive">*</span>
           </label>
-          <div className="flex flex-wrap gap-2">
-            {MECHANIC_SPECIALIZATIONS.map((spec) => {
-              const selected = specializations.includes(spec)
-              return (
-                <button
-                  key={spec}
-                  type="button"
-                  onClick={() => toggleSpecialization(spec)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors ${
-                    selected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-accent"
-                  }`}
-                >
-                  {selected && <HugeiconsIcon icon={CheckmarkBadge01Icon} strokeWidth={2} className="size-3.5" />}
-                  {MECHANIC_SPECIALIZATION_LABELS[spec]}
-                </button>
-              )
-            })}
-          </div>
-          {specializations.length === 0 && (
-            <p className="mt-1.5 text-xs text-muted-foreground">Выберите хотя бы одну специализацию</p>
+          <VehicleTypePermissionPicker
+            value={vehicleTypes}
+            onChange={setVehicleTypes}
+          />
+          {vehicleTypes.length === 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Выберите хотя бы один тип техники
+            </p>
           )}
         </div>
 

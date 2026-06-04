@@ -163,6 +163,7 @@ model Mechanic {
   userId          String                   @unique
   user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   specializations MechanicSpecialization[]
+  vehicleTypes    FleetVehicleType[]       @default([])
   assignedAt      DateTime                 @default(now())
   documents       MechanicDocument[]
 }
@@ -182,6 +183,7 @@ enum MechanicAuditAction {
   doc_upload
   doc_remove
   specialization_change
+  vehicle_type_change
   unassign
 }
 

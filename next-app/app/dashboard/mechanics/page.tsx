@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import type { Mechanic, MechanicAuditEntry, User, MechanicSpecialization } from "@/lib/types"
+import type { FleetVehicleType, Mechanic, MechanicAuditEntry, User } from "@/lib/types"
 import { api } from "@/lib/api"
 import { MechanicsStats } from "@/components/mechanics/mechanics-stats"
 import { UnassignedMechanicsTable } from "@/components/mechanics/unassigned-table"
@@ -43,7 +43,7 @@ export default function MechanicsPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const handleAssign = async (data: { userId: string; specializations: MechanicSpecialization[]; documents: { type: string; fileName: string; filePath: string }[] }) => {
+  const handleAssign = async (data: { userId: string; vehicleTypes: FleetVehicleType[]; documents: { type: string; fileName: string; filePath: string }[] }) => {
     try {
       await api.mechanics.assign(data)
       toast.success("Механик назначен")
@@ -65,7 +65,7 @@ export default function MechanicsPage() {
     }
   }
 
-  const handleEditMechanic = async (userId: string, data: { specializations?: MechanicSpecialization[]; documents?: { type: string; fileName: string; filePath: string }[] }) => {
+  const handleEditMechanic = async (userId: string, data: { vehicleTypes?: FleetVehicleType[]; documents?: { type: string; fileName: string; filePath: string }[] }) => {
     try {
       await api.mechanics.update(userId, data)
       toast.success("Данные механика обновлены")
@@ -92,7 +92,7 @@ export default function MechanicsPage() {
         <h1 className="text-2xl font-bold">Механики</h1>
         <p className="text-sm text-muted-foreground">
           {canEdit
-            ? "Назначение, управление документами и специализациями механиков"
+            ? "Назначение, управление документами и допуском механиков к типам техники"
             : "Просмотр назначенных механиков и их документов"}
         </p>
       </div>
@@ -103,8 +103,8 @@ export default function MechanicsPage() {
           <AlertTitle>Есть неназначенные механики</AlertTitle>
           <AlertDescription>
             {unassigned.length === 1
-              ? `${unassigned.length} пользователь с ролью «механик» ожидает назначения. Назначьте специализации и загрузите документы.`
-              : `${unassigned.length} пользователя(-ей) с ролью «механик» ожидают назначения. Назначьте специализации и загрузите документы.`}
+              ? `${unassigned.length} пользователь с ролью «механик» ожидает назначения. Укажите типы техники и загрузите документы.`
+              : `${unassigned.length} пользователя(-ей) с ролью «механик» ожидают назначения. Укажите типы техники и загрузите документы.`}
           </AlertDescription>
         </Alert>
       )}

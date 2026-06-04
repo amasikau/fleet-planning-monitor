@@ -9,14 +9,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import type { User, MechanicSpecialization } from "@/lib/types"
+import type { FleetVehicleType, User } from "@/lib/types"
 import { AssignMechanicDialog } from "./assign-dialog"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { SearchIcon, UserAdd01Icon, HourglassIcon } from "@hugeicons/core-free-icons"
 
 interface UnassignedTableProps {
   users: User[]
-  onAssign: (data: { userId: string; specializations: MechanicSpecialization[]; documents: { type: string; fileName: string; filePath: string }[] }) => void
+  onAssign: (data: { userId: string; vehicleTypes: FleetVehicleType[]; documents: { type: string; fileName: string; filePath: string }[] }) => void
   readonly?: boolean
 }
 

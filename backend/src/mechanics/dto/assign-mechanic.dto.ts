@@ -6,7 +6,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MechanicSpecialization, MechanicDocType } from '@prisma/client';
+import { FleetVehicleType, MechanicDocType } from '@prisma/client';
 
 export class MechanicDocumentDto {
   @IsEnum(MechanicDocType)
@@ -25,8 +25,8 @@ export class AssignMechanicDto {
   userId: string;
 
   @IsArray()
-  @IsEnum(MechanicSpecialization, { each: true })
-  specializations: MechanicSpecialization[];
+  @IsEnum(FleetVehicleType, { each: true })
+  vehicleTypes: FleetVehicleType[];
 
   @IsArray()
   @IsOptional()

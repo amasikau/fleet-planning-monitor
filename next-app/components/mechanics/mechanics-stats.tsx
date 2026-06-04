@@ -17,10 +17,10 @@ interface MechanicsStatsProps {
 }
 
 export function MechanicsStats({ activeMechanics, unassignedUsers }: MechanicsStatsProps) {
-  const totalSpecializations = useMemo(() => {
-    const specs = new Set<string>()
-    activeMechanics.forEach((m) => m.specializations.forEach((s) => specs.add(s)))
-    return specs.size
+  const totalVehicleTypes = useMemo(() => {
+    const types = new Set<string>()
+    activeMechanics.forEach((m) => m.vehicleTypes.forEach((type) => types.add(type)))
+    return types.size
   }, [activeMechanics])
 
   const docsComplete = useMemo(
@@ -51,8 +51,8 @@ export function MechanicsStats({ activeMechanics, unassignedUsers }: MechanicsSt
       bgColor: "bg-emerald-500/10",
     },
     {
-      label: "Специализаций используется",
-      value: totalSpecializations,
+      label: "Типов техники покрыто",
+      value: totalVehicleTypes,
       icon: Settings02Icon,
       iconColor: "text-purple-600",
       bgColor: "bg-purple-500/10",

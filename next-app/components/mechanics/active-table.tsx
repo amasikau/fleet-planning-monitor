@@ -19,8 +19,9 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Separator } from "@/components/ui/separator"
-import type { Mechanic, MechanicSpecialization } from "@/lib/types"
-import { MECHANIC_SPECIALIZATIONS, MECHANIC_SPECIALIZATION_LABELS } from "@/lib/types"
+import { VehicleTypePermissionPicker } from "@/components/mechanics/vehicle-type-permission-picker"
+import type { FleetVehicleType, Mechanic } from "@/lib/types"
+import { FLEET_VEHICLE_TYPE_LABELS } from "@/lib/types"
 import { api } from "@/lib/api"
 import { getErrorMessage } from "@/lib/feedback"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -47,13 +48,13 @@ import {
   Loading03Icon,
 } from "@hugeicons/core-free-icons"
 
-type SortKey = "username" | "lastName" | "specializations" | "documents" | "assignedAt"
+type SortKey = "username" | "lastName" | "vehicleTypes" | "documents" | "assignedAt"
 type SortDir = "asc" | "desc"
 
 interface ActiveMechanicsTableProps {
   mechanics: Mechanic[]
   onUnassign: (userId: string) => void
-  onEdit: (userId: string, data: { specializations?: MechanicSpecialization[]; documents?: { type: string; fileName: string; filePath: string }[] }) => void
+  onEdit: (userId: string, data: { vehicleTypes?: FleetVehicleType[]; documents?: { type: string; fileName: string; filePath: string }[] }) => void
   readonly?: boolean
 }
 
@@ -83,14 +84,14 @@ export function ActiveMechanicsTable({ mechanics, onUnassign, onEdit, readonly }
           m.username.toLowerCase().includes(q) ||
           m.lastName.toLowerCase().includes(q) ||
           m.firstName.toLowerCase().includes(q) ||
-          m.specializations.some((s) => MECHANIC_SPECIALIZATION_LABELS[s].toLowerCase().includes(q))
+          m.vehicleTypes.some((type) => FLEET_VEHICLE_TYPE_LABELS[type].toLowerCase().includes(q))
       )
     }
 
     result = [...result].sort((a, b) => {
       let cmp: number
-      if (sortKey === "specializations") {
-        cmp = a.specializations.length - b.specializations.length
+      if (sortKey === "vehicleTypes") {
+        cmp = a.vehicleTypes.length - b.vehicleTypes.length
       } else if (sortKey === "documents") {
         cmp = a.documents.length - b.documents.length
       } else {
@@ -163,11 +164,11 @@ export function ActiveMechanicsTable({ mechanics, onUnassign, onEdit, readonly }
                           {renderSortIcon("lastName")}
                         </span>
                       </TableHead>
-                      <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("specializations")}>
+                      <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("vehicleTypes")}>
                         <span className="inline-flex items-center gap-1.5">
                           <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} className="size-3.5 text-muted-foreground" />
-                          Специализации
-                          {renderSortIcon("specializations")}
+                          Допуск по технике
+                          {renderSortIcon("vehicleTypes")}
                         </span>
                       </TableHead>
                       <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("documents")}>
@@ -210,9 +211,9 @@ export function ActiveMechanicsTable({ mechanics, onUnassign, onEdit, readonly }
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
-                              {mechanic.specializations.map((spec) => (
-                                <Badge key={spec} variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                                  {MECHANIC_SPECIALIZATION_LABELS[spec]}
+                              {mechanic.vehicleTypes.map((type) => (
+                                <Badge key={type} variant="secondary" className="bg-blue-100 px-1.5 py-0 text-[10px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                  {FLEET_VEHICLE_TYPE_LABELS[type]}
                                 </Badge>
                               ))}
                             </div>
@@ -277,8 +278,8 @@ export function ActiveMechanicsTable({ mechanics, onUnassign, onEdit, readonly }
               open={!!editMechanic}
               onOpenChange={(o) => !o && setEditMechanic(null)}
               mechanic={editMechanic}
-              onSave={(specializations, documents) => {
-                onEdit(editMechanic.userId, { specializations, documents })
+              onSave={(vehicleTypes, documents) => {
+                onEdit(editMechanic.userId, { vehicleTypes, documents })
                 setEditMechanic(null)
               }}
             />
@@ -329,9 +330,9 @@ function EditMechanicDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
   mechanic: Mechanic
-  onSave: (specializations: MechanicSpecialization[], documents: { type: string; fileName: string; filePath: string }[]) => void
+  onSave: (vehicleTypes: FleetVehicleType[], documents: { type: string; fileName: string; filePath: string }[]) => void
 }) {
-  const [specializations, setSpecializations] = useState<MechanicSpecialization[]>(mechanic.specializations)
+  const [vehicleTypes, setVehicleTypes] = useState<FleetVehicleType[]>(mechanic.vehicleTypes)
   const existingCertificate = mechanic.documents.find((d) => d.type === "certificate")
   const existingMedical = mechanic.documents.find((d) => d.type === "medical")
   const [certificateDoc, setCertificateDoc] = useState<UploadedDoc | null>(
@@ -347,12 +348,6 @@ function EditMechanicDialog({
 
   const wrappedOnOpenChange = (v: boolean) => {
     onOpenChange(v)
-  }
-
-  const toggleSpecialization = (spec: MechanicSpecialization) => {
-    setSpecializations((prev) =>
-      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
-    )
   }
 
   const handleUpload = useCallback(async (file: File, docType: "certificate" | "medical") => {
@@ -388,14 +383,14 @@ function EditMechanicDialog({
   }
 
   const handleSave = () => {
-    if (specializations.length === 0) {
-      toast.error("Выберите хотя бы одну специализацию")
+    if (vehicleTypes.length === 0) {
+      toast.error("Выберите хотя бы один тип техники")
       return
     }
     const documents: { type: string; fileName: string; filePath: string }[] = []
     if (certificateDoc) documents.push(certificateDoc)
     if (medicalDoc) documents.push(medicalDoc)
-    onSave(specializations, documents)
+    onSave(vehicleTypes, documents)
   }
 
   return (
@@ -416,28 +411,12 @@ function EditMechanicDialog({
         <div>
           <label className="mb-2 flex items-center gap-1.5 text-sm font-medium">
             <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} className="size-4 text-muted-foreground" />
-            Специализации
+            Типы техники
           </label>
-          <div className="flex flex-wrap gap-2">
-            {MECHANIC_SPECIALIZATIONS.map((spec) => {
-              const selected = specializations.includes(spec)
-              return (
-                <button
-                  key={spec}
-                  type="button"
-                  onClick={() => toggleSpecialization(spec)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors ${
-                    selected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:bg-accent"
-                  }`}
-                >
-                  {selected && <HugeiconsIcon icon={CheckmarkBadge01Icon} strokeWidth={2} className="size-3.5" />}
-                  {MECHANIC_SPECIALIZATION_LABELS[spec]}
-                </button>
-              )
-            })}
-          </div>
+          <VehicleTypePermissionPicker
+            value={vehicleTypes}
+            onChange={setVehicleTypes}
+          />
         </div>
 
         <div className="grid gap-3">
@@ -479,7 +458,7 @@ function EditMechanicDialog({
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => wrappedOnOpenChange(false)}>Отмена</Button>
-          <Button size="sm" disabled={specializations.length === 0 || !!uploading} onClick={handleSave}>Сохранить</Button>
+          <Button size="sm" disabled={vehicleTypes.length === 0 || !!uploading} onClick={handleSave}>Сохранить</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
