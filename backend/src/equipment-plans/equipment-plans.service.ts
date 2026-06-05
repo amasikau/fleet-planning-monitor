@@ -1050,6 +1050,7 @@ export class EquipmentPlansService {
     const occupied = new Set<string>();
     const existingPlans = await this.prisma.equipmentPlanAssignment.findMany({
       where: {
+        siteId: dto.replaceExisting ? { not: draft.siteId } : undefined,
         workDate: {
           gte: new Date(draft.startDate),
           lte: draft.stages.reduce((latest, stage) => {
@@ -1069,6 +1070,18 @@ export class EquipmentPlansService {
     });
 
     await this.prisma.$transaction(async (tx) => {
+      if (dto.replaceExisting) {
+        await tx.equipmentPlanAssignment.deleteMany({
+          where: { siteId: draft.siteId },
+        });
+        await tx.equipmentDemand.deleteMany({
+          where: { siteId: draft.siteId },
+        });
+        await tx.roadWorkStage.deleteMany({
+          where: { siteId: draft.siteId },
+        });
+      }
+
       for (const stage of draft.stages) {
         const createdStage = await tx.roadWorkStage.create({
           data: {
