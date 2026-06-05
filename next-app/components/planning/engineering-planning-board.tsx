@@ -15,9 +15,12 @@ import type {
   EquipmentPlan,
   FleetVehicleType,
   RoadWorkStage,
+  ServiceEvent,
 } from "@/lib/types"
 import {
   FLEET_VEHICLE_TYPE_LABELS,
+  SERVICE_EVENT_STATUS_LABELS,
+  SERVICE_EVENT_TYPE_LABELS,
   ROAD_WORK_STAGE_STATUS_LABELS,
   ROAD_WORK_STAGE_TYPE_LABELS,
 } from "@/lib/types"
@@ -72,11 +75,13 @@ export function EngineeringPlanningBoard({
   demands,
   plans,
   coverage,
+  serviceEvents = [],
 }: {
   stages: RoadWorkStage[]
   demands: EquipmentDemand[]
   plans: EquipmentPlan[]
   coverage: EquipmentCoverageItem[]
+  serviceEvents?: ServiceEvent[]
 }) {
   const ganttRange = useMemo(() => getDateRange(stages), [stages])
   const dateTicks = useMemo(
@@ -116,6 +121,31 @@ export function EngineeringPlanningBoard({
   const highRiskItems = coverage.filter(
     (item) => item.deficit > 0 || item.riskLevel !== "low"
   )
+
+  const serviceRisks = useMemo(() => {
+    if (plans.length === 0) return []
+
+    const plannedVehicleIds = new Set(plans.map((plan) => plan.vehicleId))
+    const range = getDateRange(stages)
+    const minDate = range?.min
+    const maxDate = range?.max
+    const dayMs = 24 * 60 * 60 * 1000
+
+    return serviceEvents
+      .filter((event) => {
+        if (event.status === "completed") return false
+        if (!plannedVehicleIds.has(event.vehicleId)) return false
+        if (event.status === "in_progress" || event.status === "overdue") return true
+        if (!event.dueAt || !minDate || !maxDate) return event.type === "repair"
+
+        const dueAt = new Date(event.dueAt)
+        return (
+          dueAt >= new Date(minDate.getTime() - 3 * dayMs) &&
+          dueAt <= new Date(maxDate.getTime() + 3 * dayMs)
+        )
+      })
+      .slice(0, 5)
+  }, [plans, serviceEvents, stages])
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
@@ -243,25 +273,41 @@ export function EngineeringPlanningBoard({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {highRiskItems.length === 0 ? (
+            {highRiskItems.length === 0 && serviceRisks.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Критических рисков по текущим потребностям не выявлено.
               </p>
             ) : (
-              highRiskItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">
-                      {item.stageName ?? item.siteName}
+              <>
+                {highRiskItems.slice(0, 5).map((item) => (
+                  <div key={item.id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">
+                        {item.stageName ?? item.siteName}
+                      </p>
+                      <Badge variant="secondary">Дефицит {item.deficit}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {FLEET_VEHICLE_TYPE_LABELS[item.vehicleType]} ·{" "}
+                      {item.recommendation}
                     </p>
-                    <Badge variant="secondary">Дефицит {item.deficit}</Badge>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {FLEET_VEHICLE_TYPE_LABELS[item.vehicleType]} ·{" "}
-                    {item.recommendation}
-                  </p>
-                </div>
-              ))
+                ))}
+                {serviceRisks.map((event) => (
+                  <div key={event.id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">{event.vehicleLabel}</p>
+                      <Badge variant="secondary">
+                        {SERVICE_EVENT_STATUS_LABELS[event.status]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {SERVICE_EVENT_TYPE_LABELS[event.type]} · {event.title}
+                      {event.dueAt ? ` · ${formatShortDate(event.dueAt)}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </>
             )}
           </CardContent>
         </Card>

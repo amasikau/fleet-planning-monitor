@@ -1023,6 +1023,12 @@ export class EquipmentPlansService {
   ): Promise<AppliedEquipmentPlanDraftView> {
     const draft = await this.generateDraft(dto);
     const createAssignments = dto.createAssignments ?? true;
+    const selectedAssignments = new Map<string, string[]>(
+      (dto.selectedAssignments ?? []).map((item) => [
+        `${item.stageSequence}:${item.vehicleType}`,
+        item.vehicleIds,
+      ]),
+    );
     let createdDemands = 0;
     let createdAssignments = 0;
     let skippedAssignments = 0;
@@ -1098,13 +1104,24 @@ export class EquipmentPlansService {
             new Date(stage.startDate),
             new Date(stage.endDate),
           )) {
-            const assignedForDate = eligibleVehicles
-              .filter((vehicle) => vehicle.type === demand.vehicleType)
-              .sort((a, b) => {
-                if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
-                if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
-                return a.id.localeCompare(b.id);
-              })
+            const selectedVehicleIds = selectedAssignments.get(
+              `${stage.sequence}:${demand.vehicleType}`,
+            );
+            const sourceVehicles = selectedVehicleIds?.length
+              ? eligibleVehicles.filter(
+                  (vehicle) =>
+                    selectedVehicleIds.includes(vehicle.id) &&
+                    vehicle.type === demand.vehicleType,
+                )
+              : eligibleVehicles
+                  .filter((vehicle) => vehicle.type === demand.vehicleType)
+                  .sort((a, b) => {
+                    if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
+                    if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
+                    return a.id.localeCompare(b.id);
+                  });
+
+            const assignedForDate = sourceVehicles
               .filter((vehicle) => {
                 const key = `${vehicle.id}:${workDate.toISOString()}:day`;
                 return !occupied.has(key);

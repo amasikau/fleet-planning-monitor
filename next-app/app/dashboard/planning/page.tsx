@@ -15,6 +15,7 @@ import type {
   RoadWorkStage,
   RoadWorkStageStatus,
   RoadWorkStageType,
+  ServiceEvent,
 } from "@/lib/types"
 import {
   EQUIPMENT_DEMAND_PRIORITY_LABELS,
@@ -75,8 +76,7 @@ import {
   PlusSignCircleIcon,
 } from "@hugeicons/core-free-icons"
 import { toast } from "sonner"
-import { EngineeringPlanningBoard } from "@/components/planning/engineering-planning-board"
-import { PlanningStepWizard } from "@/components/planning/planning-step-wizard"
+import { ObjectPlanningWorkspace } from "@/components/planning/object-planning-workspace"
 import { WorkTypeManagement } from "@/components/planning/work-type-management"
 
 const ALL_STATUSES = "__all__"
@@ -1000,7 +1000,9 @@ export default function PlanningPage() {
   const [coverage, setCoverage] = useState<EquipmentCoverageItem[]>([])
   const [sites, setSites] = useState<ConstructionSite[]>([])
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
+  const [serviceEvents, setServiceEvents] = useState<ServiceEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedSiteId, setSelectedSiteId] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>(ALL_STATUSES)
   const [showPlanDialog, setShowPlanDialog] = useState(false)
   const [showStageDialog, setShowStageDialog] = useState(false)
@@ -1018,6 +1020,7 @@ export default function PlanningPage() {
         coverageData,
         sitesData,
         vehiclesData,
+        serviceEventsData,
       ] = await Promise.all([
         api.equipmentPlans.getAll(),
         api.equipmentPlans.getStages(),
@@ -1025,6 +1028,7 @@ export default function PlanningPage() {
         api.equipmentPlans.getCoverage(),
         api.sites.getAll(),
         api.fleet.getAll(),
+        api.serviceEvents.getAll(),
       ])
       setPlans(plansData)
       setStages(stagesData)
@@ -1032,6 +1036,7 @@ export default function PlanningPage() {
       setCoverage(coverageData)
       setSites(sitesData)
       setVehicles(vehiclesData)
+      setServiceEvents(serviceEventsData)
     } catch (err) {
       toast.error(getErrorMessage(err, "Не удалось загрузить планирование"))
     } finally {
@@ -1043,28 +1048,45 @@ export default function PlanningPage() {
     void fetchData()
   }, [fetchData])
 
+  const selectedStages = useMemo(
+    () => stages.filter((stage) => stage.siteId === selectedSiteId),
+    [selectedSiteId, stages]
+  )
+  const selectedDemands = useMemo(
+    () => demands.filter((demand) => demand.siteId === selectedSiteId),
+    [demands, selectedSiteId]
+  )
+  const selectedCoverage = useMemo(
+    () => coverage.filter((item) => item.siteId === selectedSiteId),
+    [coverage, selectedSiteId]
+  )
+  const selectedPlans = useMemo(
+    () => plans.filter((plan) => plan.siteId === selectedSiteId),
+    [plans, selectedSiteId]
+  )
+
   const filteredPlans = useMemo(() => {
-    if (statusFilter === ALL_STATUSES) return plans
-    return plans.filter((plan) => plan.status === statusFilter)
-  }, [plans, statusFilter])
+    if (statusFilter === ALL_STATUSES) return selectedPlans
+    return selectedPlans.filter((plan) => plan.status === statusFilter)
+  }, [selectedPlans, statusFilter])
 
   const availableVehicles = vehicles.filter((vehicle) => vehicle.status !== "repair")
 
-  const activeDeficits = coverage.filter((item) => item.deficit > 0)
+  const activeDeficits = selectedCoverage.filter((item) => item.deficit > 0)
   const criticalDeficits = activeDeficits.filter(
     (item) => item.priority === "critical"
   )
   const averageCoverage =
-    coverage.length > 0
+    selectedCoverage.length > 0
       ? Math.round(
-          coverage.reduce((sum, item) => sum + item.coveragePercent, 0) /
-            coverage.length
+          selectedCoverage.reduce((sum, item) => sum + item.coveragePercent, 0) /
+            selectedCoverage.length
         )
       : 100
 
   const stageStats = {
-    inProgress: stages.filter((stage) => stage.status === "in_progress").length,
-    delayed: stages.filter((stage) => stage.status === "delayed").length,
+    inProgress: selectedStages.filter((stage) => stage.status === "in_progress").length,
+    delayed: selectedStages.filter((stage) => stage.status === "delayed").length,
   }
 
   const vehicleUtilization = useMemo(() => {
@@ -1075,7 +1097,7 @@ export default function PlanningPage() {
 
     return vehicles
       .map((vehicle) => {
-        const hours = plans
+        const hours = selectedPlans
           .filter((plan) => {
             const workDate = new Date(plan.workDate)
             return (
@@ -1098,7 +1120,7 @@ export default function PlanningPage() {
         }
       })
       .sort((a, b) => b.utilization - a.utilization)
-  }, [plans, vehicles])
+  }, [selectedPlans, vehicles])
 
   const overloadedVehicles = vehicleUtilization.filter(
     (item) => item.utilization > 85
@@ -1106,7 +1128,7 @@ export default function PlanningPage() {
   const idleVehicles = vehicleUtilization.filter(
     (item) => item.hours === 0 && item.vehicle.status === "reserve"
   )
-  const asphaltChainRisks = coverage.filter(
+  const asphaltChainRisks = selectedCoverage.filter(
     (item) =>
       item.deficit > 0 &&
       (item.stageType === "asphalt_paving" ||
@@ -1215,7 +1237,7 @@ export default function PlanningPage() {
             Этапы дорожных работ, потребности, сменные назначения и балансировка загрузки
           </p>
         </div>
-        {canEdit && (
+        {canEdit && selectedSiteId && (
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => setShowStageDialog(true)}>
               <HugeiconsIcon
@@ -1245,48 +1267,53 @@ export default function PlanningPage() {
         )}
       </div>
 
-      <div className="grid gap-3 px-4 sm:grid-cols-2 xl:grid-cols-5 lg:px-6">
-        <StatCard
-          label="Этапов работ"
-          value={stages.length}
-          note={`${stageStats.inProgress} в работе, ${stageStats.delayed} отстают`}
-        />
-        <StatCard
-          label="Заявок потребности"
-          value={demands.length}
-          note={`${criticalDeficits.length} критических дефицитов`}
-        />
-        <StatCard
-          label="Обеспеченность"
-          value={`${averageCoverage}%`}
-          note={`${activeDeficits.length} потребностей не закрыто`}
-        />
-        <StatCard
-          label="Плановые смены"
-          value={plans.length}
-          note={`${filteredPlans.length} в текущем фильтре`}
-        />
-        <StatCard
-          label="Балансировка"
-          value={overloadedVehicles.length}
-          note={`${idleVehicles.length} резервных единиц без смен`}
-        />
-      </div>
+      {selectedSiteId && (
+        <div className="grid gap-3 px-4 sm:grid-cols-2 xl:grid-cols-5 lg:px-6">
+          <StatCard
+            label="Этапов работ"
+            value={selectedStages.length}
+            note={`${stageStats.inProgress} в работе, ${stageStats.delayed} отстают`}
+          />
+          <StatCard
+            label="Заявок потребности"
+            value={selectedDemands.length}
+            note={`${criticalDeficits.length} критических дефицитов`}
+          />
+          <StatCard
+            label="Обеспеченность"
+            value={`${averageCoverage}%`}
+            note={`${activeDeficits.length} потребностей не закрыто`}
+          />
+          <StatCard
+            label="Плановые смены"
+            value={selectedPlans.length}
+            note={`${filteredPlans.length} в текущем фильтре`}
+          />
+          <StatCard
+            label="Балансировка"
+            value={overloadedVehicles.length}
+            note={`${idleVehicles.length} резервных единиц без смен`}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 px-4 lg:px-6">
-        <PlanningStepWizard
+        <ObjectPlanningWorkspace
           sites={sites}
+          selectedSiteId={selectedSiteId}
+          onSelectedSiteChange={setSelectedSiteId}
+          stages={selectedStages}
+          demands={selectedDemands}
+          plans={selectedPlans}
+          coverage={selectedCoverage}
+          vehicles={vehicles}
+          serviceEvents={serviceEvents}
           canEdit={canEdit}
           onApplied={fetchData}
         />
-        <EngineeringPlanningBoard
-          stages={stages}
-          demands={demands}
-          plans={plans}
-          coverage={coverage}
-        />
       </div>
 
+      {selectedSiteId && (
       <Tabs defaultValue="calendar" className="px-4 lg:px-6">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="calendar">Календарь смен</TabsTrigger>
@@ -1481,7 +1508,7 @@ export default function PlanningPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stages.length === 0 ? (
+                  {selectedStages.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={canEdit ? 7 : 6}
@@ -1491,7 +1518,7 @@ export default function PlanningPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    stages.map((stage) => (
+                    selectedStages.map((stage) => (
                       <TableRow key={stage.id}>
                         <TableCell className="pl-6 font-medium">
                           {stage.name}
@@ -1563,7 +1590,7 @@ export default function PlanningPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {demands.length === 0 ? (
+                  {selectedDemands.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={canEdit ? 8 : 7}
@@ -1573,7 +1600,7 @@ export default function PlanningPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    demands.map((demand) => (
+                    selectedDemands.map((demand) => (
                       <TableRow key={demand.id}>
                         <TableCell className="pl-6">
                           <div className="flex flex-col gap-1">
@@ -1652,7 +1679,7 @@ export default function PlanningPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {coverage.length === 0 ? (
+                  {selectedCoverage.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={7}
@@ -1662,7 +1689,7 @@ export default function PlanningPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    coverage.map((item) => (
+                    selectedCoverage.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="pl-6">
                           <div className="flex flex-col gap-1">
@@ -1812,6 +1839,7 @@ export default function PlanningPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      )}
 
       {canEdit && (
         <>
