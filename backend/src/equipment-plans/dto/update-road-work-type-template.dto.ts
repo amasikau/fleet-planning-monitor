@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -59,4 +61,9 @@ export class UpdateRoadWorkTypeTemplateDto {
   @IsOptional()
   @IsString()
   sourceNote?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  stageTemplateIds?: string[];
 }

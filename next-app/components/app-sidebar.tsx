@@ -77,6 +77,20 @@ export function AppSidebar({
       icon: (
         <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />
       ),
+      children: [
+        {
+          title: "Планирование",
+          url: "/dashboard/planning",
+        },
+        {
+          title: "Виды работ",
+          url: "/dashboard/planning/work-types",
+        },
+        {
+          title: "Этапы",
+          url: "/dashboard/planning/stages",
+        },
+      ],
     },
     {
       title: "Строительная техника",

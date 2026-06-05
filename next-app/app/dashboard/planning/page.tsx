@@ -17,15 +17,11 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  DragDropIcon,
-  PlusSignCircleIcon,
-} from "@hugeicons/core-free-icons"
+import { DragDropIcon } from "@hugeicons/core-free-icons"
 import { toast } from "sonner"
 
 import { api } from "@/lib/api"
 import { getErrorMessage } from "@/lib/feedback"
-import { useRole } from "@/contexts/role-context"
 import type {
   ConstructionSite,
   EquipmentCalculationKind,
@@ -88,7 +84,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 const stageTypeOptions: RoadWorkStageType[] = [
@@ -1453,290 +1448,7 @@ function SavedPlanView({
   )
 }
 
-function WorkTypeDialog({
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSaved: () => Promise<void>
-}) {
-  const [name, setName] = useState("")
-  const [code, setCode] = useState("")
-  const [lengthKm, setLengthKm] = useState("1")
-  const [saving, setSaving] = useState(false)
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      toast.error("Укажите название вида работ")
-      return
-    }
-
-    try {
-      setSaving(true)
-      await api.equipmentPlans.createWorkType({
-        name: name.trim(),
-        code:
-          code.trim() ||
-          name
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-zа-яё0-9]+/gi, "_")
-            .replace(/^_+|_+$/g, ""),
-        defaultLengthKm: Number(lengthKm),
-        defaultWidthM: 7,
-        defaultShiftHours: 8,
-        defaultHaulDistanceKm: 12,
-        productionRateMPerDay: 500,
-        description: "Пользовательский вид работ для планирования техники.",
-        sourceNote: "Добавлено в базе видов работ.",
-      })
-      toast.success("Вид работ добавлен")
-      setName("")
-      setCode("")
-      onOpenChange(false)
-      await onSaved()
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Не удалось добавить вид работ"))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Новый вид работ</DialogTitle>
-          <DialogDescription>
-            Вид работ используется как база для мастера планирования.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel>Название</FieldLabel>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel>Код</FieldLabel>
-            <Input value={code} onChange={(event) => setCode(event.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel>Типовая протяжённость, км</FieldLabel>
-            <Input
-              type="number"
-              min={0.1}
-              step={0.1}
-              value={lengthKm}
-              onChange={(event) => setLengthKm(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button size="sm" disabled={saving} onClick={handleSave}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function StageTemplateDialog({
-  open,
-  workTypes,
-  onOpenChange,
-  onSaved,
-}: {
-  open: boolean
-  workTypes: RoadWorkTypeTemplate[]
-  onOpenChange: (open: boolean) => void
-  onSaved: () => Promise<void>
-}) {
-  const [workTypeId, setWorkTypeId] = useState("")
-  const [name, setName] = useState("")
-  const [type, setType] = useState<RoadWorkStageType>("preparation")
-  const [durationDays, setDurationDays] = useState("1")
-  const [vehicleType, setVehicleType] = useState<FleetVehicleType>("dump_truck")
-  const [calculationKind, setCalculationKind] =
-    useState<EquipmentCalculationKind>("fixed")
-  const [baseCount, setBaseCount] = useState("1")
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (open && !workTypeId && workTypes[0]) setWorkTypeId(workTypes[0].id)
-  }, [open, workTypeId, workTypes])
-
-  const handleSave = async () => {
-    const workType = workTypes.find((item) => item.id === workTypeId)
-    if (!workType) {
-      toast.error("Выберите вид работ")
-      return
-    }
-    if (!name.trim()) {
-      toast.error("Укажите название этапа")
-      return
-    }
-
-    try {
-      setSaving(true)
-      await api.equipmentPlans.createStageTemplate(workTypeId, {
-        name: name.trim(),
-        type,
-        sequence: workType.stageTemplates.length + 1,
-        startOffsetDays: workType.stageTemplates.length,
-        durationDays: Number(durationDays),
-        canOverlap: false,
-        notes: "Добавлено в базе этапов.",
-        equipmentRules: [
-          {
-            vehicleType,
-            calculationKind,
-            baseCount: Number(baseCount),
-            countPerKm: 0,
-            minCount: 1,
-            plannedHours: 8,
-            priority: "normal",
-            notes: "",
-          },
-        ],
-      })
-      toast.success("Этап добавлен")
-      setName("")
-      onOpenChange(false)
-      await onSaved()
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Не удалось добавить этап"))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Новый этап в базе</DialogTitle>
-          <DialogDescription>
-            Этап будет предлагаться в мастере выбранного вида работ.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup className="grid gap-4 sm:grid-cols-2">
-          <Field className="sm:col-span-2">
-            <FieldLabel>Вид работ</FieldLabel>
-            <Select value={workTypeId} onValueChange={setWorkTypeId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Выберите вид работ" />
-              </SelectTrigger>
-              <SelectContent>
-                {workTypes.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Название этапа</FieldLabel>
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel>Тип этапа</FieldLabel>
-            <Select
-              value={type}
-              onValueChange={(value) => setType(value as RoadWorkStageType)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {stageTypeOptions.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {ROAD_WORK_STAGE_TYPE_LABELS[item]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Длительность, дней</FieldLabel>
-            <Input
-              type="number"
-              min={1}
-              value={durationDays}
-              onChange={(event) => setDurationDays(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Техника</FieldLabel>
-            <Select
-              value={vehicleType}
-              onValueChange={(value) => setVehicleType(value as FleetVehicleType)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(FLEET_VEHICLE_TYPE_LABELS).map(
-                  ([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Метод расчёта</FieldLabel>
-            <Select
-              value={calculationKind}
-              onValueChange={(value) =>
-                setCalculationKind(value as EquipmentCalculationKind)
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {calculationOptions.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {EQUIPMENT_CALCULATION_KIND_LABELS[item]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Базовое количество</FieldLabel>
-            <Input
-              type="number"
-              min={1}
-              value={baseCount}
-              onChange={(event) => setBaseCount(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button size="sm" disabled={saving} onClick={handleSave}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 export default function PlanningPage() {
-  const { canEdit } = useRole()
   const [sites, setSites] = useState<ConstructionSite[]>([])
   const [workTypes, setWorkTypes] = useState<RoadWorkTypeTemplate[]>([])
   const [plans, setPlans] = useState<EquipmentPlan[]>([])
@@ -1745,8 +1457,6 @@ export default function PlanningPage() {
   const [serviceEvents, setServiceEvents] = useState<ServiceEvent[]>([])
   const [selectedSiteId, setSelectedSiteId] = useState("")
   const [planningOpen, setPlanningOpen] = useState(false)
-  const [workTypeDialogOpen, setWorkTypeDialogOpen] = useState(false)
-  const [stageDialogOpen, setStageDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -1814,169 +1524,52 @@ export default function PlanningPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="plans" className="px-4 lg:px-6">
-        <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="plans">Планы</TabsTrigger>
-          <TabsTrigger value="work-types">Виды работ</TabsTrigger>
-          <TabsTrigger value="stages">Этапы</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="plans">
-          <ResizablePanelGroup
-            direction="horizontal"
-            className="min-h-[calc(100vh-12rem)] rounded-lg border"
-          >
-            <ResizablePanel defaultSize="28%" minSize="20%" maxSize="38%">
-              <div className="flex h-full flex-col gap-3 p-4">
-                <div>
-                  <p className="text-sm font-medium">Дорожные объекты</p>
-                  <p className="text-xs text-muted-foreground">
-                    Выберите объект, чтобы открыть его план.
-                  </p>
-                </div>
-                <ObjectSidebar
-                  sites={sites}
-                  selectedSiteId={selectedSiteId}
-                  stagesBySite={stagesBySite}
-                  onSelect={setSelectedSiteId}
+      <div className="px-4 lg:px-6">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="min-h-[calc(100vh-12rem)] rounded-lg border"
+        >
+          <ResizablePanel defaultSize="28%" minSize="20%" maxSize="38%">
+            <div className="flex h-full flex-col gap-3 p-4">
+              <div>
+                <p className="text-sm font-medium">Дорожные объекты</p>
+                <p className="text-xs text-muted-foreground">
+                  Выберите объект, чтобы открыть его план.
+                </p>
+              </div>
+              <ObjectSidebar
+                sites={sites}
+                selectedSiteId={selectedSiteId}
+                stagesBySite={stagesBySite}
+                onSelect={setSelectedSiteId}
+              />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize="72%">
+            <div className="h-full p-4">
+              {!selectedSite ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Объект не выбран</CardTitle>
+                    <CardDescription>
+                      Слева выберите объект. До выбора объекта графики не отображаются.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              ) : (
+                <SavedPlanView
+                  site={selectedSite}
+                  stages={selectedStages}
+                  plans={selectedPlans}
+                  serviceEvents={serviceEvents}
+                  onPlanClick={() => setPlanningOpen(true)}
                 />
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize="72%">
-              <div className="h-full p-4">
-                {!selectedSite ? (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Объект не выбран</CardTitle>
-                      <CardDescription>
-                        Слева выберите объект. До выбора объекта графики не отображаются.
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                ) : (
-                  <SavedPlanView
-                    site={selectedSite}
-                    stages={selectedStages}
-                    plans={selectedPlans}
-                    serviceEvents={serviceEvents}
-                    onPlanClick={() => setPlanningOpen(true)}
-                  />
-                )}
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </TabsContent>
-
-        <TabsContent value="work-types">
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>База видов работ</CardTitle>
-                <CardDescription>
-                  Вид работ хранит типовые параметры и набор этапов.
-                </CardDescription>
-              </div>
-              {canEdit && (
-                <Button size="sm" onClick={() => setWorkTypeDialogOpen(true)}>
-                  <HugeiconsIcon
-                    icon={PlusSignCircleIcon}
-                    strokeWidth={2}
-                    data-icon="inline-start"
-                  />
-                  Вид работ
-                </Button>
               )}
-            </CardHeader>
-            <CardContent className="grid gap-3 lg:grid-cols-2">
-              {workTypes.map((item) => (
-                <div key={item.id} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <Badge variant="secondary">
-                      {item.stageTemplates.length} этапов
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {item.description}
-                  </p>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Типовая протяжённость: {item.defaultLengthKm} км · смена{" "}
-                    {item.defaultShiftHours} ч
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="stages">
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>База этапов</CardTitle>
-                <CardDescription>
-                  Этапы привязаны к виду работ и содержат правила потребности в технике.
-                </CardDescription>
-              </div>
-              {canEdit && (
-                <Button size="sm" onClick={() => setStageDialogOpen(true)}>
-                  <HugeiconsIcon
-                    icon={PlusSignCircleIcon}
-                    strokeWidth={2}
-                    data-icon="inline-start"
-                  />
-                  Этап
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {workTypes.map((workType) => (
-                <div key={workType.id} className="rounded-lg border">
-                  <div className="border-b p-4">
-                    <p className="text-sm font-medium">{workType.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {workType.stageTemplates.length} этапов в шаблоне
-                    </p>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="pl-4">Этап</TableHead>
-                        <TableHead>Тип</TableHead>
-                        <TableHead>Дней</TableHead>
-                        <TableHead>Техника</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {workType.stageTemplates.map((stage) => (
-                        <TableRow key={stage.id}>
-                          <TableCell className="pl-4 font-medium">
-                            {stage.name}
-                          </TableCell>
-                          <TableCell>
-                            {ROAD_WORK_STAGE_TYPE_LABELS[stage.type]}
-                          </TableCell>
-                          <TableCell>{stage.durationDays}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-2">
-                              {stage.equipmentRules.map((rule) => (
-                                <Badge key={rule.id} variant="outline">
-                                  {FLEET_VEHICLE_TYPE_LABELS[rule.vehicleType]}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
 
       <PlanWizardDialog
         open={planningOpen}
@@ -1986,17 +1579,6 @@ export default function PlanningPage() {
         vehicles={vehicles}
         allPlans={plans}
         onOpenChange={setPlanningOpen}
-        onSaved={fetchData}
-      />
-      <WorkTypeDialog
-        open={workTypeDialogOpen}
-        onOpenChange={setWorkTypeDialogOpen}
-        onSaved={fetchData}
-      />
-      <StageTemplateDialog
-        open={stageDialogOpen}
-        workTypes={workTypes}
-        onOpenChange={setStageDialogOpen}
         onSaved={fetchData}
       />
     </div>

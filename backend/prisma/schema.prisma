@@ -438,26 +438,40 @@ model RoadWorkTypeTemplate {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  stageTemplates RoadWorkStageTemplate[]
+  stageTemplates RoadWorkTypeStageTemplate[]
 }
 
 model RoadWorkStageTemplate {
-  id              String               @id @default(uuid())
-  workTypeId      String
-  workType        RoadWorkTypeTemplate @relation(fields: [workTypeId], references: [id], onDelete: Cascade)
-  type            RoadWorkStageType
-  name            String
-  sequence        Int
-  startOffsetDays Int                  @default(0)
-  durationDays    Int                  @default(1)
-  canOverlap      Boolean              @default(false)
-  notes           String               @default("")
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id           String            @id @default(uuid())
+  type         RoadWorkStageType
+  name         String
+  durationDays Int               @default(1)
+  canOverlap   Boolean           @default(false)
+  notes        String            @default("")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   equipmentRules RoadWorkStageEquipmentTemplate[]
+  workTypeLinks  RoadWorkTypeStageTemplate[]
 
+  @@index([type])
+  @@index([name])
+}
+
+model RoadWorkTypeStageTemplate {
+  id              String               @id @default(uuid())
+  workTypeId      String
+  stageTemplateId String
+  sequence        Int
+  startOffsetDays Int                  @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  workType        RoadWorkTypeTemplate @relation(fields: [workTypeId], references: [id], onDelete: Cascade)
+  stageTemplate   RoadWorkStageTemplate @relation(fields: [stageTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([workTypeId, stageTemplateId])
   @@index([workTypeId])
+  @@index([stageTemplateId])
   @@index([sequence])
 }
 

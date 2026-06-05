@@ -35,6 +35,7 @@ import {
   EquipmentPlansService,
   RoadWorkTypeTemplateView,
   RoadWorkStageView,
+  RoadWorkStageTemplateView,
 } from './equipment-plans.service';
 
 interface AuthenticatedRequest {
@@ -77,6 +78,11 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.getWorkTypes();
   }
 
+  @Get('stage-templates')
+  async getStageTemplates(): Promise<RoadWorkStageTemplateView[]> {
+    return this.equipmentPlansService.getStageTemplates();
+  }
+
   @Roles('admin', 'moderator')
   @Post('work-types')
   async createWorkType(
@@ -106,7 +112,15 @@ export class EquipmentPlansController {
     @Param('id') id: string,
     @Body() dto: CreateRoadWorkStageTemplateDto,
   ): Promise<RoadWorkTypeTemplateView> {
-    return this.equipmentPlansService.createStageTemplate(id, dto);
+    return this.equipmentPlansService.createStageTemplateForWorkType(id, dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Post('stage-templates')
+  async createGlobalStageTemplate(
+    @Body() dto: CreateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkStageTemplateView> {
+    return this.equipmentPlansService.createStageTemplate(dto);
   }
 
   @Roles('admin', 'moderator')
@@ -114,7 +128,7 @@ export class EquipmentPlansController {
   async updateStageTemplate(
     @Param('id') id: string,
     @Body() dto: UpdateRoadWorkStageTemplateDto,
-  ): Promise<RoadWorkTypeTemplateView> {
+  ): Promise<RoadWorkStageTemplateView> {
     return this.equipmentPlansService.updateStageTemplate(id, dto);
   }
 
@@ -122,7 +136,7 @@ export class EquipmentPlansController {
   @Delete('stage-templates/:id')
   async removeStageTemplate(
     @Param('id') id: string,
-  ): Promise<RoadWorkTypeTemplateView> {
+  ): Promise<{ success: boolean }> {
     return this.equipmentPlansService.removeStageTemplate(id);
   }
 

@@ -10,6 +10,8 @@ const pageTitles: Record<string, string> = {
   "/dashboard/drivers": "Водители",
   "/dashboard/mechanics": "Механики",
   "/dashboard/planning": "План-график",
+  "/dashboard/planning/work-types": "Виды работ",
+  "/dashboard/planning/stages": "Этапы",
   "/dashboard/fleet": "Строительная техника",
   "/dashboard/service": "ТО и ремонты",
   "/dashboard/sites": "Дорожные объекты",

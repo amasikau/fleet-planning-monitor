@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 
@@ -13,6 +13,9 @@ async function main() {
   await prisma.equipmentPlanAssignment.deleteMany();
   await prisma.equipmentDemand.deleteMany();
   await prisma.roadWorkStage.deleteMany();
+  await prisma.roadWorkTypeStageTemplate.deleteMany();
+  await prisma.roadWorkStageEquipmentTemplate.deleteMany();
+  await prisma.roadWorkStageTemplate.deleteMany();
   await prisma.roadWorkTypeTemplate.deleteMany();
   await prisma.constructionSiteAuditLog.deleteMany();
   await prisma.siteVehicle.deleteMany();
@@ -946,8 +949,443 @@ async function main() {
     },
   });
 
-  await prisma.roadWorkTypeTemplate.create({
-    data: {
+  type StageTemplateSeed = {
+    type: Prisma.RoadWorkStageTemplateCreateInput['type'];
+    name: string;
+    durationDays: number;
+    canOverlap?: boolean;
+    notes?: string;
+    equipmentRules: Prisma.RoadWorkStageEquipmentTemplateCreateWithoutStageTemplateInput[];
+  };
+
+  const createStageTemplate = (stage: StageTemplateSeed) =>
+    prisma.roadWorkStageTemplate.create({
+      data: {
+        type: stage.type,
+        name: stage.name,
+        durationDays: stage.durationDays,
+        canOverlap: stage.canOverlap ?? false,
+        notes: stage.notes ?? '',
+        equipmentRules: { create: stage.equipmentRules },
+      },
+    });
+
+  const linkStagesToWorkType = async (
+    workTypeId: string,
+    stages: {
+      stage: { id: string; durationDays: number };
+      startOffsetDays?: number;
+    }[],
+  ) => {
+    let cursor = 0;
+    await prisma.roadWorkTypeStageTemplate.createMany({
+      data: stages.map(({ stage, startOffsetDays }, index) => {
+        const offset = startOffsetDays ?? cursor;
+        cursor = offset + stage.durationDays;
+        return {
+          workTypeId,
+          stageTemplateId: stage.id,
+          sequence: index + 1,
+          startOffsetDays: offset,
+        };
+      }),
+    });
+  };
+
+  const createWorkTypeTemplate = async (
+    data: Prisma.RoadWorkTypeTemplateCreateInput,
+    stages: {
+      stage: { id: string; durationDays: number };
+      startOffsetDays?: number;
+    }[],
+  ) => {
+    const workType = await prisma.roadWorkTypeTemplate.create({ data });
+    await linkStagesToWorkType(workType.id, stages);
+    return workType;
+  };
+
+  const trafficControlStage = await createStageTemplate({
+    type: 'traffic_control',
+    name: 'Организация движения и ограждение карты',
+    durationDays: 1,
+    notes: 'Временные знаки, конусы, схема объезда и допуск техники на карту работ.',
+    equipmentRules: [
+      {
+        vehicleType: 'van',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'high',
+        notes: 'Подвоз знаков, конусов, инструмента и освещения.',
+      },
+      {
+        vehicleType: 'passenger_car',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'normal',
+        notes: 'Мастер участка и контроль схемы движения.',
+      },
+    ],
+  });
+
+  const asphaltPreparationStage = await createStageTemplate({
+    type: 'preparation',
+    name: 'Очистка основания и подготовка к подгрунтовке',
+    durationDays: 1,
+    notes: 'Очистка основания, проверка кромок, подготовка стыков и оборудования.',
+    equipmentRules: [
+      {
+        vehicleType: 'loader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'normal',
+        notes: 'Подача инвентаря и вспомогательных материалов.',
+      },
+    ],
+  });
+
+  const tackCoatStage = await createStageTemplate({
+    type: 'tack_coat',
+    name: 'Подгрунтовка основания битумной эмульсией',
+    durationDays: 1,
+    notes: 'Подготовка сцепления перед укладкой слоя покрытия.',
+    equipmentRules: [
+      {
+        vehicleType: 'flatbed_truck',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'normal',
+        notes: 'Подвоз битумной эмульсии, шлангов и ручного оборудования.',
+      },
+    ],
+  });
+
+  const asphaltDeliveryStage = await createStageTemplate({
+    type: 'material_delivery',
+    name: 'Подвоз асфальтобетонной смеси',
+    durationDays: 3,
+    canOverlap: true,
+    notes: 'Самосвалы должны работать синхронно с производительностью асфальтоукладчика.',
+    equipmentRules: [
+      {
+        vehicleType: 'dump_truck',
+        calculationKind: 'asphalt_delivery',
+        baseCount: 4,
+        minCount: 2,
+        maxCount: 12,
+        plannedHours: 8,
+        priority: 'critical',
+        notes: 'Количество зависит от плеча доставки и времени оборота самосвала.',
+      },
+    ],
+  });
+
+  const asphaltPavingStage = await createStageTemplate({
+    type: 'asphalt_paving',
+    name: 'Укладка слоя асфальтобетона',
+    durationDays: 3,
+    canOverlap: true,
+    notes: 'Ведущая машина потока; простой из-за отсутствия смеси критичен.',
+    equipmentRules: [
+      {
+        vehicleType: 'asphalt_paver',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+        notes: 'Один асфальтоукладчик на полосу 7-7,5 м при сменной захватке.',
+      },
+    ],
+  });
+
+  const compactionStage = await createStageTemplate({
+    type: 'compaction',
+    name: 'Уплотнение покрытия катками',
+    durationDays: 3,
+    canOverlap: true,
+    notes: 'Катки идут сразу за асфальтоукладчиком, чтобы сохранить температурный режим.',
+    equipmentRules: [
+      {
+        vehicleType: 'road_roller',
+        calculationKind: 'fixed',
+        baseCount: 2,
+        minCount: 2,
+        plannedHours: 8,
+        priority: 'critical',
+        notes: 'Типовое уплотняющее звено: лёгкий/средний и тяжёлый каток.',
+      },
+    ],
+  });
+
+  const qualityControlStage = await createStageTemplate({
+    type: 'quality_control',
+    name: 'Контроль ровности, плотности и закрытие смены',
+    durationDays: 1,
+    notes: 'Приёмка карты, контроль фактических часов и оформление исполнительных данных.',
+    equipmentRules: [
+      {
+        vehicleType: 'passenger_car',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'high',
+        notes: 'Выезд инженера и лаборатории на карту работ.',
+      },
+    ],
+  });
+
+  const coldMillingStage = await createStageTemplate({
+    type: 'milling',
+    name: 'Фрезерование старого покрытия',
+    durationDays: 2,
+    canOverlap: true,
+    notes: 'Фреза является ведущей машиной, самосвалы должны подойти под конвейер без ожидания.',
+    equipmentRules: [
+      {
+        vehicleType: 'road_milling_machine',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+        notes: 'Одна дорожная фреза на поток фрезерования.',
+      },
+      {
+        vehicleType: 'dump_truck',
+        calculationKind: 'per_km',
+        baseCount: 2,
+        countPerKm: 1.5,
+        minCount: 2,
+        maxCount: 8,
+        plannedHours: 8,
+        priority: 'critical',
+        notes: 'Вывоз фрезерата зависит от длины карты и расстояния до площадки складирования.',
+      },
+    ],
+  });
+
+  const millingCleanupStage = await createStageTemplate({
+    type: 'preparation',
+    name: 'Очистка карты и подготовка основания',
+    durationDays: 1,
+    notes: 'Удаление остатков фрезерата, контроль кромок и подготовка к подгрунтовке.',
+    equipmentRules: [
+      {
+        vehicleType: 'loader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'normal',
+      },
+      {
+        vehicleType: 'passenger_car',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 4,
+        priority: 'normal',
+      },
+    ],
+  });
+
+  const surveyStage = await createStageTemplate({
+    type: 'survey',
+    name: 'Разбивка оси и проектных отметок',
+    durationDays: 1,
+    notes: 'Инженерная подготовка карты до выхода тяжёлой техники.',
+    equipmentRules: [
+      {
+        vehicleType: 'passenger_car',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'normal',
+      },
+    ],
+  });
+
+  const crushedStoneDeliveryStage = await createStageTemplate({
+    type: 'material_delivery',
+    name: 'Подвоз щебня и инертных материалов',
+    durationDays: 4,
+    canOverlap: true,
+    notes: 'Самосвалы и погрузчик должны обеспечить непрерывную подачу материала на карту.',
+    equipmentRules: [
+      {
+        vehicleType: 'dump_truck',
+        calculationKind: 'per_km',
+        baseCount: 2,
+        countPerKm: 1,
+        minCount: 2,
+        maxCount: 8,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+      {
+        vehicleType: 'loader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'high',
+      },
+    ],
+  });
+
+  const baseProfilingStage = await createStageTemplate({
+    type: 'base_layer',
+    name: 'Распределение и профилирование основания',
+    durationDays: 4,
+    canOverlap: true,
+    notes: 'Профилирование слоя по проектным отметкам перед уплотнением.',
+    equipmentRules: [
+      {
+        vehicleType: 'motor_grader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+      {
+        vehicleType: 'bulldozer',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'high',
+      },
+    ],
+  });
+
+  const baseCompactionStage = await createStageTemplate({
+    type: 'compaction',
+    name: 'Послойное уплотнение основания',
+    durationDays: 4,
+    canOverlap: true,
+    notes: 'Катки работают вслед за распределением материала.',
+    equipmentRules: [
+      {
+        vehicleType: 'road_roller',
+        calculationKind: 'fixed',
+        baseCount: 2,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+    ],
+  });
+
+  const earthworksStage = await createStageTemplate({
+    type: 'earthworks',
+    name: 'Разработка и перемещение грунта',
+    durationDays: 5,
+    notes: 'Экскаватор и бульдозер формируют фронт, самосвалы вывозят лишний грунт.',
+    equipmentRules: [
+      {
+        vehicleType: 'excavator',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+      {
+        vehicleType: 'bulldozer',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'high',
+      },
+      {
+        vehicleType: 'dump_truck',
+        calculationKind: 'per_km',
+        baseCount: 2,
+        countPerKm: 1,
+        minCount: 2,
+        maxCount: 8,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+    ],
+  });
+
+  const roadbedProfilingStage = await createStageTemplate({
+    type: 'base_layer',
+    name: 'Планировка и профилирование полотна',
+    durationDays: 2,
+    canOverlap: true,
+    notes: 'Финишная планировка перед устройством основания.',
+    equipmentRules: [
+      {
+        vehicleType: 'motor_grader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'critical',
+      },
+      {
+        vehicleType: 'road_roller',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 8,
+        priority: 'high',
+      },
+    ],
+  });
+
+  const potholePreparationStage = await createStageTemplate({
+    type: 'preparation',
+    name: 'Подготовка выбоин и кромок',
+    durationDays: 1,
+    notes: 'Очистка выбоин, обрубка кромок и подготовка малой карты ремонта.',
+    equipmentRules: [
+      {
+        vehicleType: 'loader',
+        calculationKind: 'fixed',
+        baseCount: 1,
+        minCount: 1,
+        plannedHours: 6,
+        priority: 'normal',
+      },
+    ],
+  });
+
+  const potholeDeliveryStage = await createStageTemplate({
+    type: 'material_delivery',
+    name: 'Подвоз смеси и материалов для ямочного ремонта',
+    durationDays: 2,
+    canOverlap: true,
+    equipmentRules: [
+      {
+        vehicleType: 'dump_truck',
+        calculationKind: 'per_km',
+        baseCount: 1,
+        countPerKm: 0.5,
+        minCount: 1,
+        maxCount: 4,
+        plannedHours: 8,
+        priority: 'high',
+      },
+    ],
+  });
+
+  await createWorkTypeTemplate(
+    {
       code: 'asphalt_paving_hot_mix',
       name: 'Укладка горячей асфальтобетонной смеси',
       description:
@@ -959,175 +1397,20 @@ async function main() {
       productionRateMPerDay: 750,
       sourceNote:
         'Основано на технологических картах устройства асфальтобетонных покрытий: сменная захватка 750-830 м, асфальтоукладчик, самосвалы и звено катков.',
-      stageTemplates: {
-        create: [
-          {
-            type: 'traffic_control',
-            name: 'Организация движения и ограждение карты',
-            sequence: 1,
-            startOffsetDays: 0,
-            durationDays: 1,
-            notes: 'Временные знаки, конусы, схема объезда и допуск техники на карту работ.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'van',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                  notes: 'Подвоз знаков, конусов, инструмента и освещения.',
-                },
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                  notes: 'Мастер участка и контроль схемы движения.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'preparation',
-            name: 'Очистка основания и подготовка к подгрунтовке',
-            sequence: 2,
-            startOffsetDays: 0,
-            durationDays: 1,
-            notes: 'Очистка основания, проверка кромок, подготовка стыков и оборудования.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'loader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'normal',
-                  notes: 'Подача инвентаря и вспомогательных материалов.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'tack_coat',
-            name: 'Подгрунтовка основания битумной эмульсией',
-            sequence: 3,
-            startOffsetDays: 1,
-            durationDays: 1,
-            notes: 'Подготовка сцепления перед укладкой слоя покрытия.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'flatbed_truck',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                  notes: 'Подвоз битумной эмульсии, шлангов и ручного оборудования.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'material_delivery',
-            name: 'Подвоз асфальтобетонной смеси',
-            sequence: 4,
-            startOffsetDays: 1,
-            durationDays: 3,
-            canOverlap: true,
-            notes: 'Самосвалы должны работать синхронно с производительностью асфальтоукладчика.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'dump_truck',
-                  calculationKind: 'asphalt_delivery',
-                  baseCount: 4,
-                  minCount: 2,
-                  maxCount: 12,
-                  plannedHours: 8,
-                  priority: 'critical',
-                  notes: 'Количество зависит от плеча доставки и времени оборота самосвала.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'asphalt_paving',
-            name: 'Укладка слоя асфальтобетона',
-            sequence: 5,
-            startOffsetDays: 1,
-            durationDays: 3,
-            canOverlap: true,
-            notes: 'Ведущая машина потока; простой из-за отсутствия смеси критичен.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'asphalt_paver',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                  notes: 'Один асфальтоукладчик на полосу 7-7,5 м при сменной захватке.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'compaction',
-            name: 'Уплотнение покрытия катками',
-            sequence: 6,
-            startOffsetDays: 1,
-            durationDays: 3,
-            canOverlap: true,
-            notes: 'Катки идут сразу за асфальтоукладчиком, чтобы сохранить температурный режим.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'road_roller',
-                  calculationKind: 'fixed',
-                  baseCount: 2,
-                  minCount: 2,
-                  plannedHours: 8,
-                  priority: 'critical',
-                  notes: 'Типовое уплотняющее звено: лёгкий/средний и тяжёлый каток.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'quality_control',
-            name: 'Контроль ровности, плотности и закрытие смены',
-            sequence: 7,
-            startOffsetDays: 4,
-            durationDays: 1,
-            notes: 'Приёмка карты, контроль фактических часов и оформление исполнительных данных.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'high',
-                  notes: 'Выезд инженера и лаборатории на карту работ.',
-                },
-              ],
-            },
-          },
-        ],
-      },
     },
-  });
+    [
+      { stage: trafficControlStage, startOffsetDays: 0 },
+      { stage: asphaltPreparationStage, startOffsetDays: 0 },
+      { stage: tackCoatStage, startOffsetDays: 1 },
+      { stage: asphaltDeliveryStage, startOffsetDays: 1 },
+      { stage: asphaltPavingStage, startOffsetDays: 1 },
+      { stage: compactionStage, startOffsetDays: 1 },
+      { stage: qualityControlStage, startOffsetDays: 4 },
+    ],
+  );
 
-  await prisma.roadWorkTypeTemplate.create({
-    data: {
+  await createWorkTypeTemplate(
+    {
       code: 'cold_milling',
       name: 'Холодное фрезерование покрытия',
       description:
@@ -1139,96 +1422,16 @@ async function main() {
       productionRateMPerDay: 900,
       sourceNote:
         'Опирается на технологические карты холодного фрезерования: дорожная фреза работает в потоке с самосвалами для вывоза фрезерата.',
-      stageTemplates: {
-        create: [
-          {
-            type: 'traffic_control',
-            name: 'Ограждение зоны фрезерования',
-            sequence: 1,
-            startOffsetDays: 0,
-            durationDays: 1,
-            notes: 'Разметка фронта, знаки, конусы и безопасный коридор для самосвалов.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'van',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-              ],
-            },
-          },
-          {
-            type: 'milling',
-            name: 'Фрезерование старого покрытия',
-            sequence: 2,
-            startOffsetDays: 0,
-            durationDays: 2,
-            canOverlap: true,
-            notes: 'Фреза является ведущей машиной, самосвалы должны подойти под конвейер без ожидания.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'road_milling_machine',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                  notes: 'Одна дорожная фреза на поток фрезерования.',
-                },
-                {
-                  vehicleType: 'dump_truck',
-                  calculationKind: 'per_km',
-                  baseCount: 2,
-                  countPerKm: 1.5,
-                  minCount: 2,
-                  maxCount: 8,
-                  plannedHours: 8,
-                  priority: 'critical',
-                  notes: 'Вывоз фрезерата зависит от длины карты и расстояния до площадки складирования.',
-                },
-              ],
-            },
-          },
-          {
-            type: 'preparation',
-            name: 'Очистка карты и подготовка основания',
-            sequence: 3,
-            startOffsetDays: 2,
-            durationDays: 1,
-            notes: 'Удаление остатков фрезерата, контроль кромок и подготовка к подгрунтовке.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'loader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                },
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 4,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-        ],
-      },
     },
-  });
+    [
+      { stage: trafficControlStage, startOffsetDays: 0 },
+      { stage: coldMillingStage, startOffsetDays: 0 },
+      { stage: millingCleanupStage, startOffsetDays: 2 },
+    ],
+  );
 
-  await prisma.roadWorkTypeTemplate.create({
-    data: {
+  await createWorkTypeTemplate(
+    {
       code: 'crushed_stone_base',
       name: 'Устройство щебёночного основания',
       description:
@@ -1240,116 +1443,17 @@ async function main() {
       productionRateMPerDay: 500,
       sourceNote:
         'Типовой механизированный комплект: самосвалы, погрузчик, автогрейдер и катки для распределения и уплотнения основания.',
-      stageTemplates: {
-        create: [
-          {
-            type: 'survey',
-            name: 'Разбивка оси и отметок основания',
-            sequence: 1,
-            startOffsetDays: 0,
-            durationDays: 1,
-            notes: 'Инженерная подготовка карты до выхода тяжёлой техники.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-          {
-            type: 'material_delivery',
-            name: 'Подвоз щебня и инертных материалов',
-            sequence: 2,
-            startOffsetDays: 1,
-            durationDays: 4,
-            canOverlap: true,
-            notes: 'Самосвалы и погрузчик должны обеспечить непрерывную подачу материала на карту.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'dump_truck',
-                  calculationKind: 'per_km',
-                  baseCount: 2,
-                  countPerKm: 1,
-                  minCount: 2,
-                  maxCount: 8,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-                {
-                  vehicleType: 'loader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-              ],
-            },
-          },
-          {
-            type: 'base_layer',
-            name: 'Распределение и профилирование основания',
-            sequence: 3,
-            startOffsetDays: 1,
-            durationDays: 4,
-            canOverlap: true,
-            notes: 'Профилирование слоя по проектным отметкам перед уплотнением.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'motor_grader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-                {
-                  vehicleType: 'bulldozer',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-              ],
-            },
-          },
-          {
-            type: 'compaction',
-            name: 'Послойное уплотнение основания',
-            sequence: 4,
-            startOffsetDays: 2,
-            durationDays: 4,
-            canOverlap: true,
-            notes: 'Катки работают вслед за распределением материала.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'road_roller',
-                  calculationKind: 'fixed',
-                  baseCount: 2,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-              ],
-            },
-          },
-        ],
-      },
     },
-  });
+    [
+      { stage: surveyStage, startOffsetDays: 0 },
+      { stage: crushedStoneDeliveryStage, startOffsetDays: 1 },
+      { stage: baseProfilingStage, startOffsetDays: 1 },
+      { stage: baseCompactionStage, startOffsetDays: 2 },
+    ],
+  );
 
-  await prisma.roadWorkTypeTemplate.create({
-    data: {
+  await createWorkTypeTemplate(
+    {
       code: 'earthworks_roadbed',
       name: 'Земляные работы и планировка земляного полотна',
       description:
@@ -1361,102 +1465,16 @@ async function main() {
       productionRateMPerDay: 450,
       sourceNote:
         'Механизированное звено для земляных работ: экскаватор, бульдозер, самосвалы и автогрейдер.',
-      stageTemplates: {
-        create: [
-          {
-            type: 'survey',
-            name: 'Разбивка земляного полотна',
-            sequence: 1,
-            startOffsetDays: 0,
-            durationDays: 1,
-            notes: 'Геодезическая подготовка фронта работ.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-          {
-            type: 'earthworks',
-            name: 'Разработка и перемещение грунта',
-            sequence: 2,
-            startOffsetDays: 1,
-            durationDays: 5,
-            notes: 'Экскаватор и бульдозер формируют фронт, самосвалы вывозят лишний грунт.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'excavator',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-                {
-                  vehicleType: 'bulldozer',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-                {
-                  vehicleType: 'dump_truck',
-                  calculationKind: 'per_km',
-                  baseCount: 2,
-                  countPerKm: 1,
-                  minCount: 2,
-                  maxCount: 8,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-              ],
-            },
-          },
-          {
-            type: 'base_layer',
-            name: 'Планировка и профилирование полотна',
-            sequence: 3,
-            startOffsetDays: 4,
-            durationDays: 2,
-            canOverlap: true,
-            notes: 'Финишная планировка перед устройством основания.',
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'motor_grader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-                {
-                  vehicleType: 'road_roller',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-              ],
-            },
-          },
-        ],
-      },
     },
-  });
+    [
+      { stage: surveyStage, startOffsetDays: 0 },
+      { stage: earthworksStage, startOffsetDays: 1 },
+      { stage: roadbedProfilingStage, startOffsetDays: 4 },
+    ],
+  );
 
-  await prisma.roadWorkTypeTemplate.create({
-    data: {
+  await createWorkTypeTemplate(
+    {
       code: 'pothole_repair',
       name: 'Ямочный ремонт покрытия',
       description:
@@ -1468,119 +1486,15 @@ async function main() {
       productionRateMPerDay: 250,
       sourceNote:
         'Малое звено с бортовым автомобилем/фургоном, самосвалом и катком; применяется для адресной программы ремонта.',
-      stageTemplates: {
-        create: [
-          {
-            type: 'traffic_control',
-            name: 'Ограждение локальных карт ремонта',
-            sequence: 1,
-            startOffsetDays: 0,
-            durationDays: 1,
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'van',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-                {
-                  vehicleType: 'flatbed_truck',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-          {
-            type: 'preparation',
-            name: 'Подготовка выбоин и кромок',
-            sequence: 2,
-            startOffsetDays: 0,
-            durationDays: 1,
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'loader',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-          {
-            type: 'material_delivery',
-            name: 'Подвоз смеси и материалов',
-            sequence: 3,
-            startOffsetDays: 0,
-            durationDays: 2,
-            canOverlap: true,
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'dump_truck',
-                  calculationKind: 'per_km',
-                  baseCount: 1,
-                  countPerKm: 0.5,
-                  minCount: 1,
-                  maxCount: 4,
-                  plannedHours: 8,
-                  priority: 'high',
-                },
-              ],
-            },
-          },
-          {
-            type: 'compaction',
-            name: 'Уплотнение отремонтированных карт',
-            sequence: 4,
-            startOffsetDays: 1,
-            durationDays: 1,
-            canOverlap: true,
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'road_roller',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 8,
-                  priority: 'critical',
-                },
-              ],
-            },
-          },
-          {
-            type: 'quality_control',
-            name: 'Приёмка и фотофиксация ремонта',
-            sequence: 5,
-            startOffsetDays: 2,
-            durationDays: 1,
-            equipmentRules: {
-              create: [
-                {
-                  vehicleType: 'passenger_car',
-                  calculationKind: 'fixed',
-                  baseCount: 1,
-                  minCount: 1,
-                  plannedHours: 6,
-                  priority: 'normal',
-                },
-              ],
-            },
-          },
-        ],
-      },
     },
-  });
+    [
+      { stage: trafficControlStage, startOffsetDays: 0 },
+      { stage: potholePreparationStage, startOffsetDays: 0 },
+      { stage: potholeDeliveryStage, startOffsetDays: 0 },
+      { stage: compactionStage, startOffsetDays: 1 },
+      { stage: qualityControlStage, startOffsetDays: 2 },
+    ],
+  );
 
   // Assign vehicles to sites
   await prisma.siteVehicle.createMany({

@@ -20,6 +20,7 @@ import type {
   EquipmentDemand,
   EquipmentCoverageItem,
   RoadWorkTypeTemplate,
+  RoadWorkStageTemplate,
   EquipmentPlanDraft,
   AppliedEquipmentPlanDraft,
 } from "@/lib/types"
@@ -230,6 +231,8 @@ export const api = {
     },
     getWorkTypes: () =>
       fetchApi<RoadWorkTypeTemplate[]>("/equipment-plans/work-types"),
+    getStageTemplates: () =>
+      fetchApi<RoadWorkStageTemplate[]>("/equipment-plans/stage-templates"),
     createWorkType: (data: Record<string, unknown>) =>
       fetchApi<RoadWorkTypeTemplate>("/equipment-plans/work-types", {
         method: "POST",
@@ -244,7 +247,10 @@ export const api = {
       fetchApi<{ success: boolean }>(`/equipment-plans/work-types/${id}`, {
         method: "DELETE",
       }),
-    createStageTemplate: (workTypeId: string, data: Record<string, unknown>) =>
+    createStageTemplateForWorkType: (
+      workTypeId: string,
+      data: Record<string, unknown>
+    ) =>
       fetchApi<RoadWorkTypeTemplate>(
         `/equipment-plans/work-types/${workTypeId}/stages`,
         {
@@ -252,13 +258,18 @@ export const api = {
           body: JSON.stringify(data),
         }
       ),
+    createStageTemplate: (data: Record<string, unknown>) =>
+      fetchApi<RoadWorkStageTemplate>("/equipment-plans/stage-templates", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     updateStageTemplate: (id: string, data: Record<string, unknown>) =>
-      fetchApi<RoadWorkTypeTemplate>(`/equipment-plans/stage-templates/${id}`, {
+      fetchApi<RoadWorkStageTemplate>(`/equipment-plans/stage-templates/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
       }),
     deleteStageTemplate: (id: string) =>
-      fetchApi<RoadWorkTypeTemplate>(`/equipment-plans/stage-templates/${id}`, {
+      fetchApi<{ success: boolean }>(`/equipment-plans/stage-templates/${id}`, {
         method: "DELETE",
       }),
     generateDraft: (data: Record<string, unknown>) =>

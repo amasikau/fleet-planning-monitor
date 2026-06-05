@@ -97,12 +97,22 @@ const roadWorkTypeTemplateInclude = {
   stageTemplates: {
     orderBy: [{ sequence: 'asc' }],
     include: {
-      equipmentRules: {
-        orderBy: [{ priority: 'desc' }, { vehicleType: 'asc' }],
+      stageTemplate: {
+        include: {
+          equipmentRules: {
+            orderBy: [{ priority: 'desc' }, { vehicleType: 'asc' }],
+          },
+        },
       },
     },
   },
 } satisfies Prisma.RoadWorkTypeTemplateInclude;
+
+const roadWorkStageTemplateInclude = {
+  equipmentRules: {
+    orderBy: [{ priority: 'desc' }, { vehicleType: 'asc' }],
+  },
+} satisfies Prisma.RoadWorkStageTemplateInclude;
 
 type EquipmentPlanRecord = Prisma.EquipmentPlanAssignmentGetPayload<{
   include: typeof equipmentPlanInclude;
@@ -118,6 +128,10 @@ type EquipmentDemandRecord = Prisma.EquipmentDemandGetPayload<{
 
 type RoadWorkTypeTemplateRecord = Prisma.RoadWorkTypeTemplateGetPayload<{
   include: typeof roadWorkTypeTemplateInclude;
+}>;
+
+type RoadWorkStageTemplateRecord = Prisma.RoadWorkStageTemplateGetPayload<{
+  include: typeof roadWorkStageTemplateInclude;
 }>;
 
 export interface EquipmentPlanView {
@@ -369,30 +383,42 @@ export class EquipmentPlansService {
       defaultHaulDistanceKm: template.defaultHaulDistanceKm,
       productionRateMPerDay: template.productionRateMPerDay,
       sourceNote: template.sourceNote,
-      stageTemplates: template.stageTemplates.map((stage) => ({
-        id: stage.id,
-        type: stage.type,
-        name: stage.name,
-        sequence: stage.sequence,
-        startOffsetDays: stage.startOffsetDays,
-        durationDays: stage.durationDays,
-        canOverlap: stage.canOverlap,
-        notes: stage.notes,
-        equipmentRules: stage.equipmentRules.map((rule) => ({
-          id: rule.id,
-          vehicleType: rule.vehicleType,
-          calculationKind: rule.calculationKind,
-          baseCount: rule.baseCount,
-          countPerKm: rule.countPerKm,
-          minCount: rule.minCount,
-          maxCount: rule.maxCount,
-          plannedHours: rule.plannedHours,
-          priority: rule.priority,
-          notes: rule.notes,
-        })),
-      })),
+      stageTemplates: template.stageTemplates.map((link) =>
+        this.formatStageTemplate(link.stageTemplate, {
+          sequence: link.sequence,
+          startOffsetDays: link.startOffsetDays,
+        }),
+      ),
       createdAt: template.createdAt.toISOString(),
       updatedAt: template.updatedAt.toISOString(),
+    };
+  }
+
+  private formatStageTemplate(
+    stage: RoadWorkStageTemplateRecord,
+    link?: { sequence?: number; startOffsetDays?: number },
+  ): RoadWorkStageTemplateView {
+    return {
+      id: stage.id,
+      type: stage.type,
+      name: stage.name,
+      sequence: link?.sequence ?? 0,
+      startOffsetDays: link?.startOffsetDays ?? 0,
+      durationDays: stage.durationDays,
+      canOverlap: stage.canOverlap,
+      notes: stage.notes,
+      equipmentRules: stage.equipmentRules.map((rule) => ({
+        id: rule.id,
+        vehicleType: rule.vehicleType,
+        calculationKind: rule.calculationKind,
+        baseCount: rule.baseCount,
+        countPerKm: rule.countPerKm,
+        minCount: rule.minCount,
+        maxCount: rule.maxCount,
+        plannedHours: rule.plannedHours,
+        priority: rule.priority,
+        notes: rule.notes,
+      })),
     };
   }
 
@@ -403,6 +429,74 @@ export class EquipmentPlansService {
     });
     if (!template) throw new NotFoundException('Вид дорожных работ не найден');
     return template;
+  }
+
+  private async findStageTemplateOrThrow(id: string) {
+    const template = await this.prisma.roadWorkStageTemplate.findUnique({
+      where: { id },
+      include: roadWorkStageTemplateInclude,
+    });
+    if (!template) throw new NotFoundException('Шаблон этапа не найден');
+    return template;
+  }
+
+  private async resolveStageTemplateIdsOrThrow(
+    tx: Prisma.TransactionClient,
+    stageTemplateIds?: string[],
+  ) {
+    if (stageTemplateIds && stageTemplateIds.length === 0) return [];
+
+    const requestedIds = stageTemplateIds
+      ? Array.from(new Set(stageTemplateIds))
+      : (
+          await tx.roadWorkStageTemplate.findMany({
+            orderBy: [{ name: 'asc' }],
+            select: { id: true },
+          })
+        ).map((stage) => stage.id);
+
+    if (requestedIds.length === 0) return [];
+
+    const existing = await tx.roadWorkStageTemplate.findMany({
+      where: { id: { in: requestedIds } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((stage) => stage.id));
+    const missing = requestedIds.filter((id) => !existingIds.has(id));
+    if (missing.length > 0) {
+      throw new NotFoundException('Один или несколько этапов из справочника не найдены');
+    }
+
+    return requestedIds;
+  }
+
+  private async replaceWorkTypeStageLinks(
+    tx: Prisma.TransactionClient,
+    workTypeId: string,
+    stageTemplateIds: string[],
+  ) {
+    await tx.roadWorkTypeStageTemplate.deleteMany({ where: { workTypeId } });
+    if (stageTemplateIds.length === 0) return;
+
+    const stageRows = await tx.roadWorkStageTemplate.findMany({
+      where: { id: { in: stageTemplateIds } },
+      select: { id: true, durationDays: true },
+    });
+    const stageById = new Map(stageRows.map((stage) => [stage.id, stage]));
+    let startOffsetDays = 0;
+
+    await tx.roadWorkTypeStageTemplate.createMany({
+      data: stageTemplateIds.map((stageTemplateId, index) => {
+        const link = {
+          workTypeId,
+          stageTemplateId,
+          sequence: index + 1,
+          startOffsetDays,
+        };
+        startOffsetDays += stageById.get(stageTemplateId)?.durationDays ?? 1;
+        return link;
+      }),
+    });
   }
 
   private normalizeDraftStages(
@@ -421,16 +515,16 @@ export class EquipmentPlansService {
         .sort((a, b) => a.sequence - b.sequence);
     }
 
-    return template.stageTemplates.map((stage) => ({
-      templateStageId: stage.id,
-      type: stage.type,
-      name: stage.name,
-      sequence: stage.sequence,
-      startOffsetDays: stage.startOffsetDays,
-      durationDays: stage.durationDays,
-      canOverlap: stage.canOverlap,
-      notes: stage.notes,
-      equipmentRules: stage.equipmentRules.map((rule) => ({
+    return template.stageTemplates.map((link) => ({
+      templateStageId: link.stageTemplate.id,
+      type: link.stageTemplate.type,
+      name: link.stageTemplate.name,
+      sequence: link.sequence,
+      startOffsetDays: link.startOffsetDays,
+      durationDays: link.stageTemplate.durationDays,
+      canOverlap: link.stageTemplate.canOverlap,
+      notes: link.stageTemplate.notes,
+      equipmentRules: link.stageTemplate.equipmentRules.map((rule) => ({
         vehicleType: rule.vehicleType,
         calculationKind: rule.calculationKind,
         baseCount: rule.baseCount,
@@ -688,22 +782,40 @@ export class EquipmentPlansService {
     return templates.map((template) => this.formatWorkType(template));
   }
 
+  async getStageTemplates(): Promise<RoadWorkStageTemplateView[]> {
+    const templates = await this.prisma.roadWorkStageTemplate.findMany({
+      include: roadWorkStageTemplateInclude,
+      orderBy: [{ name: 'asc' }],
+    });
+    return templates.map((template) => this.formatStageTemplate(template));
+  }
+
   async createWorkType(
     dto: CreateRoadWorkTypeTemplateDto,
   ): Promise<RoadWorkTypeTemplateView> {
-    const template = await this.prisma.roadWorkTypeTemplate.create({
-      data: {
-        code: dto.code.trim(),
-        name: dto.name.trim(),
-        description: dto.description?.trim() ?? '',
-        defaultLengthKm: dto.defaultLengthKm,
-        defaultWidthM: dto.defaultWidthM,
-        defaultShiftHours: dto.defaultShiftHours,
-        defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
-        productionRateMPerDay: dto.productionRateMPerDay,
-        sourceNote: dto.sourceNote?.trim() ?? '',
-      },
-      include: roadWorkTypeTemplateInclude,
+    const template = await this.prisma.$transaction(async (tx) => {
+      const stageTemplateIds = await this.resolveStageTemplateIdsOrThrow(
+        tx,
+        dto.stageTemplateIds,
+      );
+      const created = await tx.roadWorkTypeTemplate.create({
+        data: {
+          code: dto.code.trim(),
+          name: dto.name.trim(),
+          description: dto.description?.trim() ?? '',
+          defaultLengthKm: dto.defaultLengthKm,
+          defaultWidthM: dto.defaultWidthM,
+          defaultShiftHours: dto.defaultShiftHours,
+          defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
+          productionRateMPerDay: dto.productionRateMPerDay,
+          sourceNote: dto.sourceNote?.trim() ?? '',
+        },
+      });
+      await this.replaceWorkTypeStageLinks(tx, created.id, stageTemplateIds);
+      return tx.roadWorkTypeTemplate.findUniqueOrThrow({
+        where: { id: created.id },
+        include: roadWorkTypeTemplateInclude,
+      });
     });
     return this.formatWorkType(template);
   }
@@ -713,22 +825,36 @@ export class EquipmentPlansService {
     dto: UpdateRoadWorkTypeTemplateDto,
   ): Promise<RoadWorkTypeTemplateView> {
     await this.findWorkTypeOrThrow(id);
-    const template = await this.prisma.roadWorkTypeTemplate.update({
-      where: { id },
-      data: {
-        code: dto.code !== undefined ? dto.code.trim() : undefined,
-        name: dto.name !== undefined ? dto.name.trim() : undefined,
-        description:
-          dto.description !== undefined ? dto.description.trim() : undefined,
-        defaultLengthKm: dto.defaultLengthKm,
-        defaultWidthM: dto.defaultWidthM,
-        defaultShiftHours: dto.defaultShiftHours,
-        defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
-        productionRateMPerDay: dto.productionRateMPerDay,
-        sourceNote:
-          dto.sourceNote !== undefined ? dto.sourceNote.trim() : undefined,
-      },
-      include: roadWorkTypeTemplateInclude,
+    const template = await this.prisma.$transaction(async (tx) => {
+      await tx.roadWorkTypeTemplate.update({
+        where: { id },
+        data: {
+          code: dto.code !== undefined ? dto.code.trim() : undefined,
+          name: dto.name !== undefined ? dto.name.trim() : undefined,
+          description:
+            dto.description !== undefined ? dto.description.trim() : undefined,
+          defaultLengthKm: dto.defaultLengthKm,
+          defaultWidthM: dto.defaultWidthM,
+          defaultShiftHours: dto.defaultShiftHours,
+          defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
+          productionRateMPerDay: dto.productionRateMPerDay,
+          sourceNote:
+            dto.sourceNote !== undefined ? dto.sourceNote.trim() : undefined,
+        },
+      });
+
+      if (dto.stageTemplateIds !== undefined) {
+        const stageTemplateIds = await this.resolveStageTemplateIdsOrThrow(
+          tx,
+          dto.stageTemplateIds,
+        );
+        await this.replaceWorkTypeStageLinks(tx, id, stageTemplateIds);
+      }
+
+      return tx.roadWorkTypeTemplate.findUniqueOrThrow({
+        where: { id },
+        include: roadWorkTypeTemplateInclude,
+      });
     });
     return this.formatWorkType(template);
   }
@@ -740,17 +866,12 @@ export class EquipmentPlansService {
   }
 
   async createStageTemplate(
-    workTypeId: string,
     dto: CreateRoadWorkStageTemplateDto,
-  ): Promise<RoadWorkTypeTemplateView> {
-    await this.findWorkTypeOrThrow(workTypeId);
-    await this.prisma.roadWorkStageTemplate.create({
+  ): Promise<RoadWorkStageTemplateView> {
+    const template = await this.prisma.roadWorkStageTemplate.create({
       data: {
-        workTypeId,
         type: dto.type,
         name: dto.name.trim(),
-        sequence: dto.sequence,
-        startOffsetDays: dto.startOffsetDays ?? 0,
         durationDays: dto.durationDays,
         canOverlap: dto.canOverlap ?? false,
         notes: dto.notes?.trim() ?? '',
@@ -768,6 +889,35 @@ export class EquipmentPlansService {
           })),
         },
       },
+      include: roadWorkStageTemplateInclude,
+    });
+    return this.formatStageTemplate(template);
+  }
+
+  async createStageTemplateForWorkType(
+    workTypeId: string,
+    dto: CreateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    await this.findWorkTypeOrThrow(workTypeId);
+    const stage = await this.createStageTemplate(dto);
+    const existingLinks = await this.prisma.roadWorkTypeStageTemplate.findMany({
+      where: { workTypeId },
+      orderBy: [{ sequence: 'asc' }],
+      include: { stageTemplate: { select: { durationDays: true } } },
+    });
+    const startOffsetDays =
+      dto.startOffsetDays ??
+      existingLinks.reduce(
+        (sum, link) => sum + link.stageTemplate.durationDays,
+        0,
+      );
+    await this.prisma.roadWorkTypeStageTemplate.create({
+      data: {
+        workTypeId,
+        stageTemplateId: stage.id,
+        sequence: dto.sequence ?? existingLinks.length + 1,
+        startOffsetDays,
+      },
     });
     const template = await this.findWorkTypeOrThrow(workTypeId);
     return this.formatWorkType(template);
@@ -776,20 +926,14 @@ export class EquipmentPlansService {
   async updateStageTemplate(
     id: string,
     dto: UpdateRoadWorkStageTemplateDto,
-  ): Promise<RoadWorkTypeTemplateView> {
-    const existing = await this.prisma.roadWorkStageTemplate.findUnique({
-      where: { id },
-    });
-    if (!existing) throw new NotFoundException('Шаблон этапа не найден');
-
+  ): Promise<RoadWorkStageTemplateView> {
+    await this.findStageTemplateOrThrow(id);
     await this.prisma.$transaction(async (tx) => {
       await tx.roadWorkStageTemplate.update({
         where: { id },
         data: {
           type: dto.type,
           name: dto.name !== undefined ? dto.name.trim() : undefined,
-          sequence: dto.sequence,
-          startOffsetDays: dto.startOffsetDays,
           durationDays: dto.durationDays,
           canOverlap: dto.canOverlap,
           notes: dto.notes !== undefined ? dto.notes.trim() : undefined,
@@ -817,19 +961,14 @@ export class EquipmentPlansService {
       }
     });
 
-    const template = await this.findWorkTypeOrThrow(existing.workTypeId);
-    return this.formatWorkType(template);
+    const template = await this.findStageTemplateOrThrow(id);
+    return this.formatStageTemplate(template);
   }
 
-  async removeStageTemplate(id: string): Promise<RoadWorkTypeTemplateView> {
-    const existing = await this.prisma.roadWorkStageTemplate.findUnique({
-      where: { id },
-    });
-    if (!existing) throw new NotFoundException('Шаблон этапа не найден');
-
+  async removeStageTemplate(id: string): Promise<{ success: boolean }> {
+    await this.findStageTemplateOrThrow(id);
     await this.prisma.roadWorkStageTemplate.delete({ where: { id } });
-    const template = await this.findWorkTypeOrThrow(existing.workTypeId);
-    return this.formatWorkType(template);
+    return { success: true };
   }
 
   async generateDraft(

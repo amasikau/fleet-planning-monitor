@@ -77,11 +77,12 @@ export class CreateRoadWorkStageTemplateDto {
   @IsString()
   name: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  sequence: number;
+  sequence?: number;
 
   @IsOptional()
   @Type(() => Number)
