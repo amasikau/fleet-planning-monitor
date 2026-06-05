@@ -207,6 +207,7 @@ enum FleetVehicleType {
   loader
   asphalt_paver
   road_roller
+  road_milling_machine
   motor_grader
   truck_tractor
   flatbed_truck
@@ -364,14 +365,18 @@ enum EquipmentPlanStatus {
 }
 
 enum RoadWorkStageType {
+  survey
+  traffic_control
   preparation
   earthworks
   milling
+  tack_coat
   base_layer
   asphalt_paving
   compaction
   material_delivery
   marking
+  quality_control
   maintenance
 }
 
@@ -386,6 +391,12 @@ enum EquipmentDemandPriority {
   normal
   high
   critical
+}
+
+enum EquipmentCalculationKind {
+  fixed
+  per_km
+  asphalt_delivery
 }
 
 model ConstructionSite {
@@ -411,6 +422,63 @@ model ConstructionSite {
 
   @@index([isCompleted])
   @@index([workPeriodEnd])
+}
+
+model RoadWorkTypeTemplate {
+  id                    String   @id @default(uuid())
+  code                  String   @unique
+  name                  String
+  description           String   @default("")
+  defaultLengthKm       Float    @default(1)
+  defaultWidthM         Float    @default(7)
+  defaultShiftHours     Int      @default(8)
+  defaultHaulDistanceKm Float    @default(12)
+  productionRateMPerDay Int      @default(750)
+  sourceNote            String   @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  stageTemplates RoadWorkStageTemplate[]
+}
+
+model RoadWorkStageTemplate {
+  id              String               @id @default(uuid())
+  workTypeId      String
+  workType        RoadWorkTypeTemplate @relation(fields: [workTypeId], references: [id], onDelete: Cascade)
+  type            RoadWorkStageType
+  name            String
+  sequence        Int
+  startOffsetDays Int                  @default(0)
+  durationDays    Int                  @default(1)
+  canOverlap      Boolean              @default(false)
+  notes           String               @default("")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  equipmentRules RoadWorkStageEquipmentTemplate[]
+
+  @@index([workTypeId])
+  @@index([sequence])
+}
+
+model RoadWorkStageEquipmentTemplate {
+  id              String                   @id @default(uuid())
+  stageTemplateId String
+  stageTemplate   RoadWorkStageTemplate    @relation(fields: [stageTemplateId], references: [id], onDelete: Cascade)
+  vehicleType     FleetVehicleType
+  calculationKind EquipmentCalculationKind @default(fixed)
+  baseCount       Int                      @default(1)
+  countPerKm      Float                    @default(0)
+  minCount        Int                      @default(1)
+  maxCount        Int?
+  plannedHours    Int                      @default(8)
+  priority        EquipmentDemandPriority  @default(normal)
+  notes           String                   @default("")
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([stageTemplateId])
+  @@index([vehicleType])
 }
 
 model SiteVehicle {

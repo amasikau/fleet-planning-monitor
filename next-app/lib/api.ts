@@ -19,6 +19,9 @@ import type {
   RoadWorkStage,
   EquipmentDemand,
   EquipmentCoverageItem,
+  RoadWorkTypeTemplate,
+  EquipmentPlanDraft,
+  AppliedEquipmentPlanDraft,
 } from "@/lib/types"
 import { translateErrorMessage } from "@/lib/feedback"
 
@@ -225,6 +228,49 @@ export const api = {
       const qs = params ? "?" + new URLSearchParams(params).toString() : ""
       return fetchApi<EquipmentCoverageItem[]>(`/equipment-plans/coverage${qs}`)
     },
+    getWorkTypes: () =>
+      fetchApi<RoadWorkTypeTemplate[]>("/equipment-plans/work-types"),
+    createWorkType: (data: Record<string, unknown>) =>
+      fetchApi<RoadWorkTypeTemplate>("/equipment-plans/work-types", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateWorkType: (id: string, data: Record<string, unknown>) =>
+      fetchApi<RoadWorkTypeTemplate>(`/equipment-plans/work-types/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteWorkType: (id: string) =>
+      fetchApi<{ success: boolean }>(`/equipment-plans/work-types/${id}`, {
+        method: "DELETE",
+      }),
+    createStageTemplate: (workTypeId: string, data: Record<string, unknown>) =>
+      fetchApi<RoadWorkTypeTemplate>(
+        `/equipment-plans/work-types/${workTypeId}/stages`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
+    updateStageTemplate: (id: string, data: Record<string, unknown>) =>
+      fetchApi<RoadWorkTypeTemplate>(`/equipment-plans/stage-templates/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteStageTemplate: (id: string) =>
+      fetchApi<RoadWorkTypeTemplate>(`/equipment-plans/stage-templates/${id}`, {
+        method: "DELETE",
+      }),
+    generateDraft: (data: Record<string, unknown>) =>
+      fetchApi<EquipmentPlanDraft>("/equipment-plans/draft", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    applyDraft: (data: Record<string, unknown>) =>
+      fetchApi<AppliedEquipmentPlanDraft>("/equipment-plans/apply-draft", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     create: (data: Record<string, unknown>) =>
       fetchApi<EquipmentPlan>("/equipment-plans", {
         method: "POST",

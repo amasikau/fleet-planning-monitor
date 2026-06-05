@@ -22,6 +22,7 @@ const vehicleTypeGroups: {
       "loader",
       "asphalt_paver",
       "road_roller",
+      "road_milling_machine",
       "motor_grader",
       "tractor",
     ],

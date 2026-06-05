@@ -13,18 +13,27 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { ApplyEquipmentPlanDraftDto } from './dto/apply-equipment-plan-draft.dto';
 import { CreateEquipmentDemandDto } from './dto/create-equipment-demand.dto';
 import { CreateEquipmentPlanDto } from './dto/create-equipment-plan.dto';
 import { CreateRoadWorkStageDto } from './dto/create-road-work-stage.dto';
+import { CreateRoadWorkStageTemplateDto } from './dto/create-road-work-stage-template.dto';
+import { CreateRoadWorkTypeTemplateDto } from './dto/create-road-work-type-template.dto';
+import { GenerateEquipmentPlanDraftDto } from './dto/generate-equipment-plan-draft.dto';
 import { UpdateEquipmentDemandDto } from './dto/update-equipment-demand.dto';
 import { UpdateEquipmentPlanDto } from './dto/update-equipment-plan.dto';
 import { UpdateRoadWorkStageDto } from './dto/update-road-work-stage.dto';
+import { UpdateRoadWorkStageTemplateDto } from './dto/update-road-work-stage-template.dto';
+import { UpdateRoadWorkTypeTemplateDto } from './dto/update-road-work-type-template.dto';
 import {
+  AppliedEquipmentPlanDraftView,
   EquipmentCoverageView,
   EquipmentDemandView,
+  EquipmentPlanDraftView,
   EquipmentPlanStatsView,
   EquipmentPlanView,
   EquipmentPlansService,
+  RoadWorkTypeTemplateView,
   RoadWorkStageView,
 } from './equipment-plans.service';
 
@@ -61,6 +70,77 @@ export class EquipmentPlansController {
     @Query('siteId') siteId?: string,
   ): Promise<EquipmentCoverageView[]> {
     return this.equipmentPlansService.getCoverage({ siteId });
+  }
+
+  @Get('work-types')
+  async getWorkTypes(): Promise<RoadWorkTypeTemplateView[]> {
+    return this.equipmentPlansService.getWorkTypes();
+  }
+
+  @Roles('admin', 'moderator')
+  @Post('work-types')
+  async createWorkType(
+    @Body() dto: CreateRoadWorkTypeTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    return this.equipmentPlansService.createWorkType(dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Put('work-types/:id')
+  async updateWorkType(
+    @Param('id') id: string,
+    @Body() dto: UpdateRoadWorkTypeTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    return this.equipmentPlansService.updateWorkType(id, dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Delete('work-types/:id')
+  async removeWorkType(@Param('id') id: string): Promise<{ success: boolean }> {
+    return this.equipmentPlansService.removeWorkType(id);
+  }
+
+  @Roles('admin', 'moderator')
+  @Post('work-types/:id/stages')
+  async createStageTemplate(
+    @Param('id') id: string,
+    @Body() dto: CreateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    return this.equipmentPlansService.createStageTemplate(id, dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Put('stage-templates/:id')
+  async updateStageTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    return this.equipmentPlansService.updateStageTemplate(id, dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Delete('stage-templates/:id')
+  async removeStageTemplate(
+    @Param('id') id: string,
+  ): Promise<RoadWorkTypeTemplateView> {
+    return this.equipmentPlansService.removeStageTemplate(id);
+  }
+
+  @Roles('admin', 'moderator')
+  @Post('draft')
+  async generateDraft(
+    @Body() dto: GenerateEquipmentPlanDraftDto,
+  ): Promise<EquipmentPlanDraftView> {
+    return this.equipmentPlansService.generateDraft(dto);
+  }
+
+  @Roles('admin', 'moderator')
+  @Post('apply-draft')
+  async applyDraft(
+    @Body() dto: ApplyEquipmentPlanDraftDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<AppliedEquipmentPlanDraftView> {
+    return this.equipmentPlansService.applyDraft(dto, req.user.id);
   }
 
   @Get()

@@ -17,6 +17,7 @@ const fleetVehicleTypeLabels: Record<FleetVehicleType, string> = {
   loader: 'Погрузчик фронтальный',
   asphalt_paver: 'Асфальтоукладчик',
   road_roller: 'Каток дорожный',
+  road_milling_machine: 'Дорожная фреза',
   motor_grader: 'Автогрейдер',
   truck_tractor: 'Грузовой седельный тягач',
   flatbed_truck: 'Грузовой бортовой',

@@ -75,6 +75,9 @@ import {
   PlusSignCircleIcon,
 } from "@hugeicons/core-free-icons"
 import { toast } from "sonner"
+import { EngineeringPlanningBoard } from "@/components/planning/engineering-planning-board"
+import { PlanningStepWizard } from "@/components/planning/planning-step-wizard"
+import { WorkTypeManagement } from "@/components/planning/work-type-management"
 
 const ALL_STATUSES = "__all__"
 const NONE_VALUE = "__none__"
@@ -1270,9 +1273,24 @@ export default function PlanningPage() {
         />
       </div>
 
+      <div className="flex flex-col gap-4 px-4 lg:px-6">
+        <PlanningStepWizard
+          sites={sites}
+          canEdit={canEdit}
+          onApplied={fetchData}
+        />
+        <EngineeringPlanningBoard
+          stages={stages}
+          demands={demands}
+          plans={plans}
+          coverage={coverage}
+        />
+      </div>
+
       <Tabs defaultValue="calendar" className="px-4 lg:px-6">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="calendar">Календарь смен</TabsTrigger>
+          <TabsTrigger value="templates">Виды работ</TabsTrigger>
           <TabsTrigger value="stages">Этапы работ</TabsTrigger>
           <TabsTrigger value="demands">Потребность</TabsTrigger>
           <TabsTrigger value="coverage">Обеспеченность</TabsTrigger>
@@ -1435,6 +1453,10 @@ export default function PlanningPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="templates" className="flex flex-col gap-4">
+          <WorkTypeManagement />
         </TabsContent>
 
         <TabsContent value="stages" className="flex flex-col gap-4">

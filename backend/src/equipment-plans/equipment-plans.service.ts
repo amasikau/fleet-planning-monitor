@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  EquipmentCalculationKind,
   EquipmentDemandPriority,
   EquipmentPlanShift,
   EquipmentPlanStatus,
@@ -14,12 +15,22 @@ import {
   RoadWorkStageType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ApplyEquipmentPlanDraftDto } from './dto/apply-equipment-plan-draft.dto';
 import { CreateEquipmentDemandDto } from './dto/create-equipment-demand.dto';
 import { CreateEquipmentPlanDto } from './dto/create-equipment-plan.dto';
 import { CreateRoadWorkStageDto } from './dto/create-road-work-stage.dto';
+import { CreateRoadWorkStageTemplateDto } from './dto/create-road-work-stage-template.dto';
+import { CreateRoadWorkTypeTemplateDto } from './dto/create-road-work-type-template.dto';
+import {
+  EquipmentPlanDraftRuleDto,
+  EquipmentPlanDraftStageDto,
+  GenerateEquipmentPlanDraftDto,
+} from './dto/generate-equipment-plan-draft.dto';
 import { UpdateEquipmentDemandDto } from './dto/update-equipment-demand.dto';
 import { UpdateEquipmentPlanDto } from './dto/update-equipment-plan.dto';
 import { UpdateRoadWorkStageDto } from './dto/update-road-work-stage.dto';
+import { UpdateRoadWorkStageTemplateDto } from './dto/update-road-work-stage-template.dto';
+import { UpdateRoadWorkTypeTemplateDto } from './dto/update-road-work-type-template.dto';
 
 const siteSelect = {
   id: true,
@@ -82,6 +93,17 @@ const equipmentDemandInclude = {
   stage: { select: stageSelect },
 } satisfies Prisma.EquipmentDemandInclude;
 
+const roadWorkTypeTemplateInclude = {
+  stageTemplates: {
+    orderBy: [{ sequence: 'asc' }],
+    include: {
+      equipmentRules: {
+        orderBy: [{ priority: 'desc' }, { vehicleType: 'asc' }],
+      },
+    },
+  },
+} satisfies Prisma.RoadWorkTypeTemplateInclude;
+
 type EquipmentPlanRecord = Prisma.EquipmentPlanAssignmentGetPayload<{
   include: typeof equipmentPlanInclude;
 }>;
@@ -92,6 +114,10 @@ type RoadWorkStageRecord = Prisma.RoadWorkStageGetPayload<{
 
 type EquipmentDemandRecord = Prisma.EquipmentDemandGetPayload<{
   include: typeof equipmentDemandInclude;
+}>;
+
+type RoadWorkTypeTemplateRecord = Prisma.RoadWorkTypeTemplateGetPayload<{
+  include: typeof roadWorkTypeTemplateInclude;
 }>;
 
 export interface EquipmentPlanView {
@@ -183,6 +209,105 @@ export interface EquipmentCoverageView {
   recommendation: string;
 }
 
+export interface RoadWorkStageEquipmentTemplateView {
+  id: string;
+  vehicleType: FleetVehicleType;
+  calculationKind: EquipmentCalculationKind;
+  baseCount: number;
+  countPerKm: number;
+  minCount: number;
+  maxCount: number | null;
+  plannedHours: number;
+  priority: EquipmentDemandPriority;
+  notes: string;
+}
+
+export interface RoadWorkStageTemplateView {
+  id: string;
+  type: RoadWorkStageType;
+  name: string;
+  sequence: number;
+  startOffsetDays: number;
+  durationDays: number;
+  canOverlap: boolean;
+  notes: string;
+  equipmentRules: RoadWorkStageEquipmentTemplateView[];
+}
+
+export interface RoadWorkTypeTemplateView {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  defaultLengthKm: number;
+  defaultWidthM: number;
+  defaultShiftHours: number;
+  defaultHaulDistanceKm: number;
+  productionRateMPerDay: number;
+  sourceNote: string;
+  stageTemplates: RoadWorkStageTemplateView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EquipmentPlanDraftDemandView {
+  vehicleType: FleetVehicleType;
+  requiredCount: number;
+  plannedHours: number;
+  priority: EquipmentDemandPriority;
+  calculationKind: EquipmentCalculationKind;
+  calculationNote: string;
+  availableCount: number;
+  repairCount: number;
+  conflictCount: number;
+  withoutDriverCount: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  risks: string[];
+  notes: string;
+}
+
+export interface EquipmentPlanDraftStageView {
+  templateStageId: string | null;
+  type: RoadWorkStageType;
+  name: string;
+  sequence: number;
+  startOffsetDays: number;
+  durationDays: number;
+  startDate: string;
+  endDate: string;
+  canOverlap: boolean;
+  notes: string;
+  demands: EquipmentPlanDraftDemandView[];
+}
+
+export interface EquipmentPlanDraftView {
+  siteId: string;
+  siteName: string;
+  workTypeId: string;
+  workTypeName: string;
+  startDate: string;
+  lengthKm: number;
+  widthM: number;
+  shiftHours: number;
+  haulDistanceKm: number;
+  stages: EquipmentPlanDraftStageView[];
+  summary: {
+    totalStages: number;
+    totalDemands: number;
+    totalRequiredUnits: number;
+    criticalRisks: number;
+    plannedAssignments: number;
+  };
+}
+
+export interface AppliedEquipmentPlanDraftView {
+  createdStages: number;
+  createdDemands: number;
+  createdAssignments: number;
+  skippedAssignments: number;
+  draft: EquipmentPlanDraftView;
+}
+
 @Injectable()
 export class EquipmentPlansService {
   constructor(private readonly prisma: PrismaService) {}
@@ -211,6 +336,207 @@ export class EquipmentPlansService {
     return [user.lastName, user.firstName, user.middleName]
       .filter(Boolean)
       .join(' ');
+  }
+
+  private addDays(date: Date, days: number) {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + days);
+    next.setUTCHours(0, 0, 0, 0);
+    return next;
+  }
+
+  private daysBetweenInclusive(startDate: Date, endDate: Date) {
+    const dates: Date[] = [];
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      dates.push(new Date(current));
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+    return dates;
+  }
+
+  private formatWorkType(
+    template: RoadWorkTypeTemplateRecord,
+  ): RoadWorkTypeTemplateView {
+    return {
+      id: template.id,
+      code: template.code,
+      name: template.name,
+      description: template.description,
+      defaultLengthKm: template.defaultLengthKm,
+      defaultWidthM: template.defaultWidthM,
+      defaultShiftHours: template.defaultShiftHours,
+      defaultHaulDistanceKm: template.defaultHaulDistanceKm,
+      productionRateMPerDay: template.productionRateMPerDay,
+      sourceNote: template.sourceNote,
+      stageTemplates: template.stageTemplates.map((stage) => ({
+        id: stage.id,
+        type: stage.type,
+        name: stage.name,
+        sequence: stage.sequence,
+        startOffsetDays: stage.startOffsetDays,
+        durationDays: stage.durationDays,
+        canOverlap: stage.canOverlap,
+        notes: stage.notes,
+        equipmentRules: stage.equipmentRules.map((rule) => ({
+          id: rule.id,
+          vehicleType: rule.vehicleType,
+          calculationKind: rule.calculationKind,
+          baseCount: rule.baseCount,
+          countPerKm: rule.countPerKm,
+          minCount: rule.minCount,
+          maxCount: rule.maxCount,
+          plannedHours: rule.plannedHours,
+          priority: rule.priority,
+          notes: rule.notes,
+        })),
+      })),
+      createdAt: template.createdAt.toISOString(),
+      updatedAt: template.updatedAt.toISOString(),
+    };
+  }
+
+  private async findWorkTypeOrThrow(id: string) {
+    const template = await this.prisma.roadWorkTypeTemplate.findUnique({
+      where: { id },
+      include: roadWorkTypeTemplateInclude,
+    });
+    if (!template) throw new NotFoundException('Вид дорожных работ не найден');
+    return template;
+  }
+
+  private normalizeDraftStages(
+    template: RoadWorkTypeTemplateRecord,
+    dto: GenerateEquipmentPlanDraftDto,
+  ): EquipmentPlanDraftStageDto[] {
+    if (dto.stages?.length) {
+      return dto.stages
+        .map((stage, index) => ({
+          ...stage,
+          sequence: stage.sequence ?? index + 1,
+          startOffsetDays: stage.startOffsetDays ?? index,
+          durationDays: stage.durationDays || 1,
+          equipmentRules: stage.equipmentRules ?? [],
+        }))
+        .sort((a, b) => a.sequence - b.sequence);
+    }
+
+    return template.stageTemplates.map((stage) => ({
+      templateStageId: stage.id,
+      type: stage.type,
+      name: stage.name,
+      sequence: stage.sequence,
+      startOffsetDays: stage.startOffsetDays,
+      durationDays: stage.durationDays,
+      canOverlap: stage.canOverlap,
+      notes: stage.notes,
+      equipmentRules: stage.equipmentRules.map((rule) => ({
+        vehicleType: rule.vehicleType,
+        calculationKind: rule.calculationKind,
+        baseCount: rule.baseCount,
+        countPerKm: rule.countPerKm,
+        minCount: rule.minCount,
+        maxCount: rule.maxCount,
+        plannedHours: rule.plannedHours,
+        priority: rule.priority,
+        notes: rule.notes,
+      })),
+    }));
+  }
+
+  private calculateRequiredCount(
+    rule: EquipmentPlanDraftRuleDto,
+    params: {
+      lengthKm: number;
+      haulDistanceKm: number;
+      shiftHours: number;
+      productionRateMPerDay: number;
+    },
+  ) {
+    const calculationKind = rule.calculationKind ?? 'fixed';
+    const baseCount = rule.baseCount ?? 1;
+    const minCount = rule.minCount ?? 1;
+    const maxCount = rule.maxCount ?? null;
+    let calculated = baseCount;
+    let calculationNote = 'Фиксированное механизированное звено по технологической карте.';
+
+    if (calculationKind === 'per_km') {
+      calculated = baseCount + (rule.countPerKm ?? 0) * params.lengthKm;
+      calculationNote = `Расчёт по протяжённости: ${baseCount} базово + ${rule.countPerKm ?? 0} ед./км × ${params.lengthKm} км.`;
+    }
+
+    if (calculationKind === 'asphalt_delivery') {
+      const loadingMinutes = 12;
+      const unloadingMinutes = 8;
+      const waitingReserveMinutes = 10;
+      const averageSpeedKmh = 35;
+      const truckIntervalMinutes = Math.max(10, 60 / Math.max(baseCount, 1));
+      const travelMinutes =
+        params.haulDistanceKm > 0
+          ? (params.haulDistanceKm * 2 * 60) / averageSpeedKmh
+          : 0;
+      const cycleMinutes =
+        loadingMinutes + unloadingMinutes + waitingReserveMinutes + travelMinutes;
+      calculated = Math.ceil((cycleMinutes / truckIntervalMinutes) * 1.15);
+      calculationNote =
+        `Самосвалы рассчитаны по циклу доставки: ${Math.round(cycleMinutes)} мин оборот, ` +
+        `${params.haulDistanceKm} км плечо, резерв потока 15%.`;
+    }
+
+    const bounded = Math.max(minCount, Math.ceil(calculated));
+    const requiredCount = maxCount ? Math.min(bounded, maxCount) : bounded;
+
+    return { requiredCount, calculationKind, calculationNote };
+  }
+
+  private buildDraftRisk(params: {
+    requiredCount: number;
+    availableCount: number;
+    repairCount: number;
+    conflictCount: number;
+    withoutDriverCount: number;
+    calculationKind: EquipmentCalculationKind;
+  }) {
+    const risks: string[] = [];
+    const operationalAvailable = Math.max(
+      params.availableCount - params.conflictCount,
+      0,
+    );
+
+    if (operationalAvailable < params.requiredCount) {
+      risks.push(
+        `Дефицит ${params.requiredCount - operationalAvailable} ед. с учётом занятости в графике.`,
+      );
+    }
+    if (params.repairCount > 0) {
+      risks.push(
+        `${params.repairCount} ед. нужного типа находится в ремонте или на ТО.`,
+      );
+    }
+    if (params.conflictCount > 0) {
+      risks.push(
+        `${params.conflictCount} ед. уже занято в выбранные даты и смену.`,
+      );
+    }
+    if (params.withoutDriverCount > 0) {
+      risks.push(
+        `${params.withoutDriverCount} ед. доступной техники без закреплённого водителя.`,
+      );
+    }
+    if (params.calculationKind === 'asphalt_delivery') {
+      risks.push(
+        'Проверьте плечо доставки смеси: простой асфальтоукладчика критичен для качества покрытия.',
+      );
+    }
+
+    const riskLevel: EquipmentPlanDraftDemandView['riskLevel'] =
+      operationalAvailable < params.requiredCount
+        ? 'high'
+        : params.withoutDriverCount > 0 || params.repairCount > 0
+          ? 'medium'
+          : 'low';
+
+    return { risks, riskLevel };
   }
 
   private formatStage(stage: RoadWorkStageRecord): RoadWorkStageView {
@@ -352,6 +678,475 @@ export class EquipmentPlansService {
       throw new ConflictException('Тип выбранной техники не соответствует потребности');
     }
     return demand;
+  }
+
+  async getWorkTypes(): Promise<RoadWorkTypeTemplateView[]> {
+    const templates = await this.prisma.roadWorkTypeTemplate.findMany({
+      include: roadWorkTypeTemplateInclude,
+      orderBy: [{ name: 'asc' }],
+    });
+    return templates.map((template) => this.formatWorkType(template));
+  }
+
+  async createWorkType(
+    dto: CreateRoadWorkTypeTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    const template = await this.prisma.roadWorkTypeTemplate.create({
+      data: {
+        code: dto.code.trim(),
+        name: dto.name.trim(),
+        description: dto.description?.trim() ?? '',
+        defaultLengthKm: dto.defaultLengthKm,
+        defaultWidthM: dto.defaultWidthM,
+        defaultShiftHours: dto.defaultShiftHours,
+        defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
+        productionRateMPerDay: dto.productionRateMPerDay,
+        sourceNote: dto.sourceNote?.trim() ?? '',
+      },
+      include: roadWorkTypeTemplateInclude,
+    });
+    return this.formatWorkType(template);
+  }
+
+  async updateWorkType(
+    id: string,
+    dto: UpdateRoadWorkTypeTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    await this.findWorkTypeOrThrow(id);
+    const template = await this.prisma.roadWorkTypeTemplate.update({
+      where: { id },
+      data: {
+        code: dto.code !== undefined ? dto.code.trim() : undefined,
+        name: dto.name !== undefined ? dto.name.trim() : undefined,
+        description:
+          dto.description !== undefined ? dto.description.trim() : undefined,
+        defaultLengthKm: dto.defaultLengthKm,
+        defaultWidthM: dto.defaultWidthM,
+        defaultShiftHours: dto.defaultShiftHours,
+        defaultHaulDistanceKm: dto.defaultHaulDistanceKm,
+        productionRateMPerDay: dto.productionRateMPerDay,
+        sourceNote:
+          dto.sourceNote !== undefined ? dto.sourceNote.trim() : undefined,
+      },
+      include: roadWorkTypeTemplateInclude,
+    });
+    return this.formatWorkType(template);
+  }
+
+  async removeWorkType(id: string): Promise<{ success: boolean }> {
+    await this.findWorkTypeOrThrow(id);
+    await this.prisma.roadWorkTypeTemplate.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async createStageTemplate(
+    workTypeId: string,
+    dto: CreateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    await this.findWorkTypeOrThrow(workTypeId);
+    await this.prisma.roadWorkStageTemplate.create({
+      data: {
+        workTypeId,
+        type: dto.type,
+        name: dto.name.trim(),
+        sequence: dto.sequence,
+        startOffsetDays: dto.startOffsetDays ?? 0,
+        durationDays: dto.durationDays,
+        canOverlap: dto.canOverlap ?? false,
+        notes: dto.notes?.trim() ?? '',
+        equipmentRules: {
+          create: (dto.equipmentRules ?? []).map((rule) => ({
+            vehicleType: rule.vehicleType,
+            calculationKind: rule.calculationKind ?? 'fixed',
+            baseCount: rule.baseCount ?? 1,
+            countPerKm: rule.countPerKm ?? 0,
+            minCount: rule.minCount ?? 1,
+            maxCount: rule.maxCount ?? null,
+            plannedHours: rule.plannedHours ?? 8,
+            priority: rule.priority ?? 'normal',
+            notes: rule.notes?.trim() ?? '',
+          })),
+        },
+      },
+    });
+    const template = await this.findWorkTypeOrThrow(workTypeId);
+    return this.formatWorkType(template);
+  }
+
+  async updateStageTemplate(
+    id: string,
+    dto: UpdateRoadWorkStageTemplateDto,
+  ): Promise<RoadWorkTypeTemplateView> {
+    const existing = await this.prisma.roadWorkStageTemplate.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Шаблон этапа не найден');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.roadWorkStageTemplate.update({
+        where: { id },
+        data: {
+          type: dto.type,
+          name: dto.name !== undefined ? dto.name.trim() : undefined,
+          sequence: dto.sequence,
+          startOffsetDays: dto.startOffsetDays,
+          durationDays: dto.durationDays,
+          canOverlap: dto.canOverlap,
+          notes: dto.notes !== undefined ? dto.notes.trim() : undefined,
+        },
+      });
+
+      if (dto.equipmentRules) {
+        await tx.roadWorkStageEquipmentTemplate.deleteMany({
+          where: { stageTemplateId: id },
+        });
+        await tx.roadWorkStageEquipmentTemplate.createMany({
+          data: dto.equipmentRules.map((rule) => ({
+            stageTemplateId: id,
+            vehicleType: rule.vehicleType,
+            calculationKind: rule.calculationKind ?? 'fixed',
+            baseCount: rule.baseCount ?? 1,
+            countPerKm: rule.countPerKm ?? 0,
+            minCount: rule.minCount ?? 1,
+            maxCount: rule.maxCount ?? null,
+            plannedHours: rule.plannedHours ?? 8,
+            priority: rule.priority ?? 'normal',
+            notes: rule.notes?.trim() ?? '',
+          })),
+        });
+      }
+    });
+
+    const template = await this.findWorkTypeOrThrow(existing.workTypeId);
+    return this.formatWorkType(template);
+  }
+
+  async removeStageTemplate(id: string): Promise<RoadWorkTypeTemplateView> {
+    const existing = await this.prisma.roadWorkStageTemplate.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Шаблон этапа не найден');
+
+    await this.prisma.roadWorkStageTemplate.delete({ where: { id } });
+    const template = await this.findWorkTypeOrThrow(existing.workTypeId);
+    return this.formatWorkType(template);
+  }
+
+  async generateDraft(
+    dto: GenerateEquipmentPlanDraftDto,
+  ): Promise<EquipmentPlanDraftView> {
+    const [site, template] = await Promise.all([
+      this.assertSite(dto.siteId),
+      this.findWorkTypeOrThrow(dto.workTypeId),
+    ]);
+    const draftStages = this.normalizeDraftStages(template, dto);
+    const startDate = this.normalizeDate(dto.startDate);
+    const maxEndDate = draftStages.reduce((latest, stage) => {
+      const stageEnd = this.addDays(
+        startDate,
+        (stage.startOffsetDays ?? 0) + stage.durationDays - 1,
+      );
+      return stageEnd > latest ? stageEnd : latest;
+    }, startDate);
+
+    const [vehicles, existingPlans] = await Promise.all([
+      this.prisma.fleetVehicle.findMany({
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          assignedDriverUserId: true,
+        },
+      }),
+      this.prisma.equipmentPlanAssignment.findMany({
+        where: {
+          workDate: {
+            gte: startDate,
+            lte: maxEndDate,
+          },
+          shift: 'day',
+          status: { not: 'failed' },
+        },
+        select: {
+          vehicleId: true,
+          workDate: true,
+          vehicle: { select: { type: true } },
+        },
+      }),
+    ]);
+
+    const stages: EquipmentPlanDraftStageView[] = draftStages.map((stage) => {
+      const stageStart = this.addDays(startDate, stage.startOffsetDays ?? 0);
+      const stageEnd = this.addDays(stageStart, stage.durationDays - 1);
+      const stageDateKeys = new Set(
+        this.daysBetweenInclusive(stageStart, stageEnd).map((date) =>
+          date.toISOString(),
+        ),
+      );
+
+      const demands: EquipmentPlanDraftDemandView[] = stage.equipmentRules.map(
+        (rule) => {
+          const { requiredCount, calculationKind, calculationNote } =
+            this.calculateRequiredCount(rule, {
+              lengthKm: dto.lengthKm,
+              haulDistanceKm: dto.haulDistanceKm,
+              shiftHours: dto.shiftHours,
+              productionRateMPerDay: template.productionRateMPerDay,
+            });
+
+          const availableCount = vehicles.filter(
+            (vehicle) =>
+              vehicle.type === rule.vehicleType &&
+              (vehicle.status === 'active' || vehicle.status === 'reserve'),
+          ).length;
+          const repairCount = vehicles.filter(
+            (vehicle) =>
+              vehicle.type === rule.vehicleType &&
+              (vehicle.status === 'maintenance' || vehicle.status === 'repair'),
+          ).length;
+          const withoutDriverCount = vehicles.filter(
+            (vehicle) =>
+              vehicle.type === rule.vehicleType &&
+              (vehicle.status === 'active' || vehicle.status === 'reserve') &&
+              !vehicle.assignedDriverUserId,
+          ).length;
+          const conflictCount = new Set(
+            existingPlans
+              .filter(
+                (plan) =>
+                  plan.vehicle.type === rule.vehicleType &&
+                  stageDateKeys.has(plan.workDate.toISOString()),
+              )
+              .map((plan) => plan.vehicleId),
+          ).size;
+
+          const { risks, riskLevel } = this.buildDraftRisk({
+            requiredCount,
+            availableCount,
+            repairCount,
+            conflictCount,
+            withoutDriverCount,
+            calculationKind,
+          });
+
+          return {
+            vehicleType: rule.vehicleType,
+            requiredCount,
+            plannedHours: rule.plannedHours ?? dto.shiftHours,
+            priority: rule.priority ?? 'normal',
+            calculationKind,
+            calculationNote,
+            availableCount,
+            repairCount,
+            conflictCount,
+            withoutDriverCount,
+            riskLevel,
+            risks,
+            notes: rule.notes?.trim() ?? '',
+          };
+        },
+      );
+
+      return {
+        templateStageId: stage.templateStageId ?? null,
+        type: stage.type,
+        name: stage.name.trim(),
+        sequence: stage.sequence,
+        startOffsetDays: stage.startOffsetDays ?? 0,
+        durationDays: stage.durationDays,
+        startDate: stageStart.toISOString(),
+        endDate: stageEnd.toISOString(),
+        canOverlap: stage.canOverlap ?? false,
+        notes: stage.notes?.trim() ?? '',
+        demands,
+      };
+    });
+
+    const totalDemands = stages.reduce(
+      (sum, stage) => sum + stage.demands.length,
+      0,
+    );
+    const totalRequiredUnits = stages.reduce(
+      (sum, stage) =>
+        sum +
+        stage.demands.reduce(
+          (demandSum, demand) => demandSum + demand.requiredCount,
+          0,
+        ),
+      0,
+    );
+    const criticalRisks = stages.reduce(
+      (sum, stage) =>
+        sum +
+        stage.demands.filter((demand) => demand.riskLevel === 'high').length,
+      0,
+    );
+    const plannedAssignments = stages.reduce((sum, stage) => {
+      const stageDays = this.daysBetweenInclusive(
+        new Date(stage.startDate),
+        new Date(stage.endDate),
+      ).length;
+      return (
+        sum +
+        stage.demands.reduce(
+          (demandSum, demand) =>
+            demandSum + demand.requiredCount * stageDays,
+          0,
+        )
+      );
+    }, 0);
+
+    return {
+      siteId: site.id,
+      siteName: site.name,
+      workTypeId: template.id,
+      workTypeName: template.name,
+      startDate: startDate.toISOString(),
+      lengthKm: dto.lengthKm,
+      widthM: dto.widthM,
+      shiftHours: dto.shiftHours,
+      haulDistanceKm: dto.haulDistanceKm,
+      stages,
+      summary: {
+        totalStages: stages.length,
+        totalDemands,
+        totalRequiredUnits,
+        criticalRisks,
+        plannedAssignments,
+      },
+    };
+  }
+
+  async applyDraft(
+    dto: ApplyEquipmentPlanDraftDto,
+    createdById: string,
+  ): Promise<AppliedEquipmentPlanDraftView> {
+    const draft = await this.generateDraft(dto);
+    const createAssignments = dto.createAssignments ?? true;
+    let createdDemands = 0;
+    let createdAssignments = 0;
+    let skippedAssignments = 0;
+
+    const eligibleVehicles = await this.prisma.fleetVehicle.findMany({
+      where: { status: { in: ['active', 'reserve'] } },
+      orderBy: [
+        { assignedDriverUserId: 'asc' },
+        { status: 'asc' },
+        { plateNumber: 'asc' },
+      ],
+      select: {
+        id: true,
+        type: true,
+        assignedDriverUserId: true,
+      },
+    });
+
+    const occupied = new Set<string>();
+    const existingPlans = await this.prisma.equipmentPlanAssignment.findMany({
+      where: {
+        workDate: {
+          gte: new Date(draft.startDate),
+          lte: draft.stages.reduce((latest, stage) => {
+            const endDate = new Date(stage.endDate);
+            return endDate > latest ? endDate : latest;
+          }, new Date(draft.startDate)),
+        },
+        shift: 'day',
+        status: { not: 'failed' },
+      },
+      select: { vehicleId: true, workDate: true, shift: true },
+    });
+    existingPlans.forEach((plan) => {
+      occupied.add(
+        `${plan.vehicleId}:${plan.workDate.toISOString()}:${plan.shift}`,
+      );
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const stage of draft.stages) {
+        const createdStage = await tx.roadWorkStage.create({
+          data: {
+            siteId: draft.siteId,
+            type: stage.type,
+            name: stage.name,
+            startDate: new Date(stage.startDate),
+            endDate: new Date(stage.endDate),
+            status: 'planned',
+            notes:
+              stage.notes ||
+              `Создано мастером планирования по виду работ "${draft.workTypeName}".`,
+          },
+        });
+
+        for (const demand of stage.demands) {
+          const createdDemand = await tx.equipmentDemand.create({
+            data: {
+              siteId: draft.siteId,
+              stageId: createdStage.id,
+              vehicleType: demand.vehicleType,
+              requiredCount: demand.requiredCount,
+              plannedHours: demand.plannedHours,
+              priority: demand.priority,
+              notes: `${demand.calculationNote}${demand.notes ? ` ${demand.notes}` : ''}`,
+            },
+          });
+          createdDemands += 1;
+
+          if (!createAssignments) continue;
+
+          for (const workDate of this.daysBetweenInclusive(
+            new Date(stage.startDate),
+            new Date(stage.endDate),
+          )) {
+            const assignedForDate = eligibleVehicles
+              .filter((vehicle) => vehicle.type === demand.vehicleType)
+              .sort((a, b) => {
+                if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
+                if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
+                return a.id.localeCompare(b.id);
+              })
+              .filter((vehicle) => {
+                const key = `${vehicle.id}:${workDate.toISOString()}:day`;
+                return !occupied.has(key);
+              })
+              .slice(0, demand.requiredCount);
+
+            skippedAssignments += Math.max(
+              demand.requiredCount - assignedForDate.length,
+              0,
+            );
+
+            for (const vehicle of assignedForDate) {
+              const key = `${vehicle.id}:${workDate.toISOString()}:day`;
+              occupied.add(key);
+              await tx.equipmentPlanAssignment.create({
+                data: {
+                  siteId: draft.siteId,
+                  stageId: createdStage.id,
+                  demandId: createdDemand.id,
+                  vehicleId: vehicle.id,
+                  workDate,
+                  shift: 'day',
+                  plannedHours: demand.plannedHours,
+                  status: 'planned',
+                  notes: `Автоматическое назначение по мастеру: ${stage.name}.`,
+                  createdById,
+                },
+              });
+              createdAssignments += 1;
+            }
+          }
+        }
+      }
+    });
+
+    return {
+      createdStages: draft.stages.length,
+      createdDemands,
+      createdAssignments,
+      skippedAssignments,
+      draft,
+    };
   }
 
   async findAll(query: {
