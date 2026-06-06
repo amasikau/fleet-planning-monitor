@@ -151,6 +151,10 @@ export class GenerateEquipmentPlanDraftDto {
   haulDistanceKm: number;
 
   @IsOptional()
+  @IsBoolean()
+  autoSchedule?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => EquipmentPlanDraftStageDto)

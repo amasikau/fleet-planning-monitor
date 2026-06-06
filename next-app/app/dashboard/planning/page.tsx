@@ -157,13 +157,6 @@ type GanttTask = {
   subtitle?: string
 }
 
-type AvailabilitySuggestion = {
-  startDate: string
-  endDate: string
-  delayDays: number
-  vehicles: FleetVehicle[]
-}
-
 function todayInput() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -442,57 +435,6 @@ function buildDefaultSelections(
   })
 
   return result
-}
-
-function findFutureAvailabilitySuggestion({
-  vehicleType,
-  requiredCount,
-  startDate,
-  durationDays,
-  vehicles,
-  plans,
-}: {
-  vehicleType: FleetVehicleType
-  requiredCount: number
-  startDate: string
-  durationDays: number
-  vehicles: FleetVehicle[]
-  plans: EquipmentPlan[]
-}): AvailabilitySuggestion | null {
-  const pool = vehicles
-    .filter(
-      (vehicle) =>
-        vehicle.type === vehicleType &&
-        (vehicle.status === "active" || vehicle.status === "reserve")
-    )
-    .sort((a, b) => {
-      if (a.assignedDriver && !b.assignedDriver) return -1
-      if (!a.assignedDriver && b.assignedDriver) return 1
-      return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
-    })
-
-  if (pool.length < requiredCount) return null
-
-  for (let delayDays = 1; delayDays <= 90; delayDays += 1) {
-    const shiftedStartDate = addDays(startDate, delayDays)
-    const shiftedEndDate = addDays(startDate, delayDays + durationDays - 1)
-    const shiftedWorkDates = datesBetween(shiftedStartDate, shiftedEndDate)
-    const freeVehicles = pool.filter(
-      (vehicle) =>
-        !hasVehicleConflict(vehicle.id, shiftedWorkDates, plans)
-    )
-
-    if (freeVehicles.length >= requiredCount) {
-      return {
-        startDate: shiftedStartDate,
-        endDate: shiftedEndDate,
-        delayDays,
-        vehicles: freeVehicles.slice(0, requiredCount),
-      }
-    }
-  }
-
-  return null
 }
 
 function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: string }) {
@@ -1021,7 +963,7 @@ function PlanWizardDialog({
     setStageEditorOpen(true)
   }
 
-  const buildPayload = () => ({
+  const buildPayload = (options?: { autoSchedule?: boolean }) => ({
     siteId: site?.id ?? "",
     workTypeId,
     startDate,
@@ -1029,6 +971,7 @@ function PlanWizardDialog({
     widthM: workType?.defaultWidthM ?? 7,
     shiftHours: workType?.defaultShiftHours ?? 8,
     haulDistanceKm: workType?.defaultHaulDistanceKm ?? 12,
+    ...(options?.autoSchedule ? { autoSchedule: true } : {}),
     stages: stages.map((stage, index) => ({
       templateStageId: stage.templateStageId,
       type: stage.type,
@@ -1041,6 +984,39 @@ function PlanWizardDialog({
       equipmentRules: stage.equipmentRules,
     })),
   })
+
+  const countShortage = (
+    targetDraft: EquipmentPlanDraft,
+    selections: SelectedVehicles
+  ) =>
+    targetDraft.stages.reduce(
+      (stageSum, stage) =>
+        stageSum +
+        stage.demands.reduce((demandSum, demand) => {
+          const key = demandKey(stage.sequence, demand.vehicleType)
+          const selectedCount = selections[key]?.length ?? 0
+          return demandSum + Math.max(demand.requiredCount - selectedCount, 0)
+        }, 0),
+      0
+    )
+
+  const syncStagesFromDraft = (targetDraft: EquipmentPlanDraft) => {
+    setStages((items) =>
+      items.map((stage) => {
+        const plannedStage = targetDraft.stages.find(
+          (item) => item.sequence === stage.sequence
+        )
+
+        return plannedStage
+          ? {
+              ...stage,
+              startOffsetDays: plannedStage.startOffsetDays,
+              durationDays: plannedStage.durationDays,
+            }
+          : stage
+      })
+    )
+  }
 
   const handleCalculate = async () => {
     if (!site || !workTypeId || stages.length === 0) {
@@ -1099,52 +1075,44 @@ function PlanWizardDialog({
     }
   }
 
-  const applyAvailabilitySuggestion = (
-    stageSequence: number,
-    vehicleType: FleetVehicleType,
-    suggestion: AvailabilitySuggestion
-  ) => {
-    if (!draft) return
-
-    const shiftedDraft: EquipmentPlanDraft = {
-      ...draft,
-      stages: draft.stages.map((stage) =>
-        stage.sequence >= stageSequence
-          ? {
-              ...stage,
-              startOffsetDays: stage.startOffsetDays + suggestion.delayDays,
-              startDate: addDays(stage.startDate, suggestion.delayDays),
-              endDate: addDays(stage.endDate, suggestion.delayDays),
-            }
-          : stage
-      ),
+  const handleAutoSchedule = async () => {
+    if (!site || !workTypeId || stages.length === 0) {
+      toast.error("Заполните исходные данные и этапы")
+      return
     }
-    const key = demandKey(stageSequence, vehicleType)
-    const defaults = buildDefaultSelections(
-      shiftedDraft,
-      vehicles,
-      planningPlans,
-      false
-    )
 
-    setStages((items) =>
-      items.map((stage) =>
-        stage.sequence >= stageSequence
-          ? {
-              ...stage,
-              startOffsetDays: stage.startOffsetDays + suggestion.delayDays,
-            }
-          : stage
+    const beforeShortage = draft ? countShortage(draft, selectedVehicles) : 0
+
+    try {
+      setLoading(true)
+      const latestPlans = await api.equipmentPlans.getAll()
+      const result = await api.equipmentPlans.generateDraft(
+        buildPayload({ autoSchedule: true })
       )
-    )
-    setDraft(shiftedDraft)
-    setSelectedVehicles({
-      ...defaults,
-      [key]: suggestion.vehicles.map((vehicle) => vehicle.id),
-    })
-    toast.success(
-      `Этап сдвинут на ${suggestion.delayDays} дн.; техника назначена на ближайшее свободное окно`
-    )
+      const defaults = buildDefaultSelections(result, vehicles, latestPlans)
+      const afterShortage = countShortage(result, defaults)
+
+      setPlanningPlans(latestPlans)
+      setDraft(result)
+      setSelectedVehicles(defaults)
+      syncStagesFromDraft(result)
+
+      if (afterShortage === 0) {
+        toast.success("Этапы сдвинуты, свободная техника назначена автоматически")
+      } else if (beforeShortage && afterShortage < beforeShortage) {
+        toast.warning(
+          "Часть дефицита закрыта автоматическим сдвигом. По оставшейся потребности свободной техники нет."
+        )
+      } else {
+        toast.warning(
+          "Backend не нашёл окно, где хватает всей нужной техники в ближайшие 90 дней"
+        )
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Не удалось автоматически сдвинуть этапы"))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const stepLabels = ["Исходные данные", "Этапы", "Свободная техника", "Итог"]
@@ -1157,6 +1125,9 @@ function PlanWizardDialog({
         subtitle: `${ROAD_WORK_STAGE_TYPE_LABELS[stage.type]} · ${stage.durationDays} дн.`,
       }))
     : getStageTasksFromDraft(startDate, stages)
+  const hasPlanningShortage = draft
+    ? countShortage(draft, selectedVehicles) > 0
+    : false
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1309,6 +1280,29 @@ function PlanWizardDialog({
 
         {step === 2 && (
           <div className="flex flex-col gap-4">
+            {draft && hasPlanningShortage && (
+              <Alert className="border-primary/25 bg-background">
+                <AlertTitle>Есть дефицит свободной техники</AlertTitle>
+                <AlertDescription className="mt-2 flex flex-col gap-3 text-sm">
+                  <p>
+                    Приложение может автоматически сдвинуть этапы, подобрать
+                    ближайшие свободные даты и назначить доступную технику без
+                    ручного выбора по каждой позиции.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-fit"
+                    onClick={handleAutoSchedule}
+                    disabled={loading}
+                  >
+                    Сдвинуть этапы и назначить
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {!draft ? (
               <div className="rounded-lg border p-6">
                 <p className="text-sm font-medium">Расчёт ещё не выполнен</p>
@@ -1358,17 +1352,6 @@ function PlanWizardDialog({
                         demand.requiredCount - candidates.length,
                         0
                       )
-                      const availabilitySuggestion =
-                        shortage > 0
-                          ? findFutureAvailabilitySuggestion({
-                              vehicleType: demand.vehicleType,
-                              requiredCount: demand.requiredCount,
-                              startDate: stage.startDate,
-                              durationDays: stage.durationDays,
-                              vehicles,
-                              plans: planningPlans,
-                            })
-                          : null
 
                       return (
                         <div key={key} className="rounded-md bg-muted p-3">
@@ -1392,50 +1375,11 @@ function PlanWizardDialog({
                                     : `Не хватает ${shortage} ед. техники`}
                                 </AlertTitle>
                                 <AlertDescription className="mt-1 flex flex-col gap-3 text-sm">
-                                  {availabilitySuggestion ? (
-                                    <>
-                                      <p>
-                                        Можно увеличить срок работ: ближайшее
-                                        окно для {demand.requiredCount} ед. -
-                                        с {formatDate(availabilitySuggestion.startDate)}
-                                        {" "}по {formatDate(availabilitySuggestion.endDate)}
-                                        {" "}со сдвигом на {availabilitySuggestion.delayDays} дн.
-                                      </p>
-                                      <div className="flex flex-wrap gap-2">
-                                        {availabilitySuggestion.vehicles.map((vehicle) => (
-                                          <Badge
-                                            key={vehicle.id}
-                                            variant="outline"
-                                            className="bg-card"
-                                          >
-                                            {vehicleLabel(vehicle)}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="w-fit"
-                                        onClick={() =>
-                                          applyAvailabilitySuggestion(
-                                            stage.sequence,
-                                            demand.vehicleType,
-                                            availabilitySuggestion
-                                          )
-                                        }
-                                      >
-                                        Сдвинуть этап и назначить
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <p>
-                                      В ближайшие 90 дней нет окна, где
-                                      одновременно свободно нужное количество
-                                      исправной техники. Уменьшите потребность
-                                      этапа или добавьте технику в парк.
-                                    </p>
-                                  )}
+                                  <p>
+                                    Нажмите общую кнопку выше, чтобы backend
+                                    пересчитал даты всех этапов и автоматически
+                                    назначил свободную технику.
+                                  </p>
                                 </AlertDescription>
                               </Alert>
                             )}

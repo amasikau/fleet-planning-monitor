@@ -1062,6 +1062,9 @@ export class EquipmentPlansService {
       );
       return stageEnd > latest ? stageEnd : latest;
     }, startDate);
+    const searchEndDate = dto.autoSchedule
+      ? this.addDays(maxEndDate, 90)
+      : maxEndDate;
 
     const [vehicles, existingPlans] = await Promise.all([
       this.prisma.fleetVehicle.findMany({
@@ -1071,7 +1074,7 @@ export class EquipmentPlansService {
         where: {
           workDate: {
             gte: startDate,
-            lte: maxEndDate,
+            lte: searchEndDate,
           },
           shift: 'day',
           status: { not: 'failed' },
@@ -1084,14 +1087,98 @@ export class EquipmentPlansService {
       }),
     ]);
 
-    const stages: EquipmentPlanDraftStageView[] = draftStages.map((stage) => {
-      const stageStart = this.addDays(startDate, stage.startOffsetDays ?? 0);
-      const stageEnd = this.addDays(stageStart, stage.durationDays - 1);
-      const stageDateKeys = new Set(
-        this.daysBetweenInclusive(stageStart, stageEnd).map((date) =>
-          this.dateKey(date),
-        ),
+    const getStageDateKeys = (stageStart: Date, durationDays: number) =>
+      new Set(
+        this.daysBetweenInclusive(
+          stageStart,
+          this.addDays(stageStart, durationDays - 1),
+        ).map((date) => this.dateKey(date)),
       );
+
+    const getOccupiedVehicleIds = (
+      vehicleType: FleetVehicleType,
+      stageDateKeys: Set<string>,
+    ) => [
+      ...new Set(
+        existingPlans
+          .filter(
+            (plan) =>
+              plan.vehicle.type === vehicleType &&
+              stageDateKeys.has(this.dateKey(plan.workDate)),
+          )
+          .map((plan) => plan.vehicleId),
+      ),
+    ];
+
+    const getAvailableVehicles = (
+      vehicleType: FleetVehicleType,
+      occupiedVehicleIds: string[],
+    ) => {
+      const occupiedVehicleIdSet = new Set(occupiedVehicleIds);
+      return vehicles
+        .filter(
+          (vehicle) =>
+            vehicle.type === vehicleType &&
+            (vehicle.status === 'active' || vehicle.status === 'reserve') &&
+            !occupiedVehicleIdSet.has(vehicle.id),
+        )
+        .sort((a, b) => this.sortDraftVehicles(a, b));
+    };
+
+    const canCoverStage = (
+      stage: EquipmentPlanDraftStageDto,
+      stageStart: Date,
+    ) => {
+      const stageDateKeys = getStageDateKeys(stageStart, stage.durationDays);
+
+      return stage.equipmentRules.every((rule) => {
+        const { requiredCount } = this.calculateRequiredCount(rule, {
+          lengthKm: dto.lengthKm,
+          haulDistanceKm: dto.haulDistanceKm,
+          shiftHours: dto.shiftHours,
+          productionRateMPerDay: template.productionRateMPerDay,
+        });
+        const occupiedVehicleIds = getOccupiedVehicleIds(
+          rule.vehicleType,
+          stageDateKeys,
+        );
+        return (
+          getAvailableVehicles(rule.vehicleType, occupiedVehicleIds).length >=
+          requiredCount
+        );
+      });
+    };
+
+    let accumulatedAutoDelayDays = 0;
+
+    const stages: EquipmentPlanDraftStageView[] = draftStages.map((stage) => {
+      const originalOffsetDays = stage.startOffsetDays ?? 0;
+      let effectiveOffsetDays = originalOffsetDays;
+
+      if (dto.autoSchedule) {
+        effectiveOffsetDays = originalOffsetDays + accumulatedAutoDelayDays;
+
+        for (
+          let delayDays = accumulatedAutoDelayDays;
+          delayDays <= 90;
+          delayDays += 1
+        ) {
+          const candidateStart = this.addDays(
+            startDate,
+            originalOffsetDays + delayDays,
+          );
+
+          if (canCoverStage(stage, candidateStart)) {
+            accumulatedAutoDelayDays = delayDays;
+            effectiveOffsetDays = originalOffsetDays + delayDays;
+            break;
+          }
+        }
+      }
+
+      const stageStart = this.addDays(startDate, effectiveOffsetDays);
+      const stageEnd = this.addDays(stageStart, stage.durationDays - 1);
+      const stageDateKeys = getStageDateKeys(stageStart, stage.durationDays);
 
       const demands: EquipmentPlanDraftDemandView[] = stage.equipmentRules.map(
         (rule) => {
@@ -1119,27 +1206,15 @@ export class EquipmentPlansService {
               (vehicle.status === 'active' || vehicle.status === 'reserve') &&
               !vehicle.assignedDriverUserId,
           ).length;
-          const occupiedVehicleIds = [
-            ...new Set(
-              existingPlans
-                .filter(
-                  (plan) =>
-                    plan.vehicle.type === rule.vehicleType &&
-                    stageDateKeys.has(this.dateKey(plan.workDate)),
-                )
-                .map((plan) => plan.vehicleId),
-            ),
-          ];
+          const occupiedVehicleIds = getOccupiedVehicleIds(
+            rule.vehicleType,
+            stageDateKeys,
+          );
           const conflictCount = occupiedVehicleIds.length;
-          const occupiedVehicleIdSet = new Set(occupiedVehicleIds);
-          const availableVehicles = vehicles
-            .filter(
-              (vehicle) =>
-                vehicle.type === rule.vehicleType &&
-                (vehicle.status === 'active' || vehicle.status === 'reserve') &&
-                !occupiedVehicleIdSet.has(vehicle.id),
-            )
-            .sort((a, b) => this.sortDraftVehicles(a, b))
+          const availableVehicles = getAvailableVehicles(
+            rule.vehicleType,
+            occupiedVehicleIds,
+          )
             .map((vehicle) => this.formatDraftVehicle(vehicle));
 
           const { risks, riskLevel } = this.buildDraftRisk({
@@ -1176,7 +1251,7 @@ export class EquipmentPlansService {
         type: stage.type,
         name: stage.name.trim(),
         sequence: stage.sequence,
-        startOffsetDays: stage.startOffsetDays ?? 0,
+        startOffsetDays: effectiveOffsetDays,
         durationDays: stage.durationDays,
         startDate: stageStart.toISOString(),
         endDate: stageEnd.toISOString(),
