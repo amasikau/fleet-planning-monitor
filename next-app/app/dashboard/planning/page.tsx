@@ -28,6 +28,7 @@ import type {
   EquipmentDemandPriority,
   EquipmentPlan,
   EquipmentPlanDraft,
+  EquipmentPlanDraftVehicle,
   FleetVehicle,
   FleetVehicleType,
   RoadWorkStage,
@@ -212,8 +213,16 @@ function datesBetween(startDate: string, endDate: string) {
   return result
 }
 
-function vehicleLabel(vehicle: FleetVehicle) {
+function vehicleLabel(
+  vehicle: Pick<FleetVehicle, "brand" | "model" | "plateNumber">
+) {
   return `${vehicle.brand} ${vehicle.model} · ${vehicle.plateNumber}`
+}
+
+function vehicleDriverName(
+  vehicle: Pick<FleetVehicle, "assignedDriver"> | EquipmentPlanDraftVehicle
+) {
+  return vehicle.assignedDriver?.fullName ?? null
 }
 
 function demandKey(stageSequence: number, vehicleType: FleetVehicleType) {
@@ -396,7 +405,8 @@ function hasVehicleConflict(
 function buildDefaultSelections(
   draft: EquipmentPlanDraft,
   vehicles: FleetVehicle[],
-  plans: EquipmentPlan[]
+  plans: EquipmentPlan[],
+  useBackendCandidates = true
 ) {
   const result: SelectedVehicles = {}
 
@@ -404,6 +414,14 @@ function buildDefaultSelections(
     const workDates = datesBetween(stage.startDate, stage.endDate)
 
     stage.demands.forEach((demand) => {
+      if (useBackendCandidates && demand.availableVehicles) {
+        result[demandKey(stage.sequence, demand.vehicleType)] =
+          demand.availableVehicles
+            .slice(0, demand.requiredCount)
+            .map((vehicle) => vehicle.id)
+        return
+      }
+
       const candidates = vehicles
         .filter(
           (vehicle) =>
@@ -1105,7 +1123,8 @@ function PlanWizardDialog({
     const defaults = buildDefaultSelections(
       shiftedDraft,
       vehicles,
-      planningPlans
+      planningPlans,
+      false
     )
 
     setStages((items) =>
@@ -1315,23 +1334,25 @@ function PlanWizardDialog({
                     {stage.demands.map((demand) => {
                       const key = demandKey(stage.sequence, demand.vehicleType)
                       const workDates = datesBetween(stage.startDate, stage.endDate)
-                      const candidates = vehicles
-                        .filter(
-                          (vehicle) =>
-                            vehicle.type === demand.vehicleType &&
-                            (vehicle.status === "active" ||
-                              vehicle.status === "reserve") &&
-                            !hasVehicleConflict(
-                              vehicle.id,
-                              workDates,
-                              planningPlans
-                            )
-                        )
-                        .sort((a, b) => {
-                          if (a.assignedDriver && !b.assignedDriver) return -1
-                          if (!a.assignedDriver && b.assignedDriver) return 1
-                          return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
-                        })
+                      const candidates =
+                        demand.availableVehicles ??
+                        vehicles
+                          .filter(
+                            (vehicle) =>
+                              vehicle.type === demand.vehicleType &&
+                              (vehicle.status === "active" ||
+                                vehicle.status === "reserve") &&
+                              !hasVehicleConflict(
+                                vehicle.id,
+                                workDates,
+                                planningPlans
+                              )
+                          )
+                          .sort((a, b) => {
+                            if (a.assignedDriver && !b.assignedDriver) return -1
+                            if (!a.assignedDriver && b.assignedDriver) return 1
+                            return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
+                          })
                       const selected = selectedVehicles[key] ?? []
                       const shortage = Math.max(
                         demand.requiredCount - candidates.length,
@@ -1452,9 +1473,8 @@ function PlanWizardDialog({
                                     {vehicleLabel(vehicle)}
                                   </span>
                                   <span className="block text-xs text-muted-foreground">
-                                    {vehicle.assignedDriver
-                                      ? vehicle.assignedDriver.fullName
-                                      : "Нет закреплённого водителя"}
+                                    {vehicleDriverName(vehicle) ??
+                                      "Нет закреплённого водителя"}
                                   </span>
                                 </span>
                               </label>

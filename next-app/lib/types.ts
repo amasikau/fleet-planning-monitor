@@ -510,10 +510,22 @@ export interface EquipmentPlanDraftDemand {
   availableCount: number
   repairCount: number
   conflictCount: number
+  occupiedVehicleIds?: string[]
+  availableVehicles?: EquipmentPlanDraftVehicle[]
   withoutDriverCount: number
   riskLevel: "low" | "medium" | "high"
   risks: string[]
   notes: string
+}
+
+export interface EquipmentPlanDraftVehicle {
+  id: string
+  brand: string
+  model: string
+  plateNumber: string
+  type: FleetVehicleType
+  status: FleetVehicleStatus
+  assignedDriver: { userId: string; fullName: string } | null
 }
 
 export interface EquipmentPlanDraftStage {

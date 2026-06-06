@@ -84,6 +84,27 @@ const equipmentPlanInclude = {
   },
 } satisfies Prisma.EquipmentPlanAssignmentInclude;
 
+const draftVehicleSelect = {
+  id: true,
+  brand: true,
+  model: true,
+  plateNumber: true,
+  status: true,
+  type: true,
+  assignedDriverUserId: true,
+  assignedDriver: {
+    include: {
+      user: {
+        select: {
+          lastName: true,
+          firstName: true,
+          middleName: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.FleetVehicleSelect;
+
 const roadWorkStageInclude = {
   site: { select: siteSelect },
 } satisfies Prisma.RoadWorkStageInclude;
@@ -132,6 +153,10 @@ type RoadWorkTypeTemplateRecord = Prisma.RoadWorkTypeTemplateGetPayload<{
 
 type RoadWorkStageTemplateRecord = Prisma.RoadWorkStageTemplateGetPayload<{
   include: typeof roadWorkStageTemplateInclude;
+}>;
+
+type DraftVehicleRecord = Prisma.FleetVehicleGetPayload<{
+  select: typeof draftVehicleSelect;
 }>;
 
 export interface EquipmentPlanView {
@@ -264,6 +289,16 @@ export interface RoadWorkTypeTemplateView {
   updatedAt: string;
 }
 
+export interface EquipmentPlanDraftVehicleView {
+  id: string;
+  brand: string;
+  model: string;
+  plateNumber: string;
+  type: FleetVehicleType;
+  status: FleetVehicleStatus;
+  assignedDriver: { userId: string; fullName: string } | null;
+}
+
 export interface EquipmentPlanDraftDemandView {
   vehicleType: FleetVehicleType;
   requiredCount: number;
@@ -274,6 +309,8 @@ export interface EquipmentPlanDraftDemandView {
   availableCount: number;
   repairCount: number;
   conflictCount: number;
+  occupiedVehicleIds: string[];
+  availableVehicles: EquipmentPlanDraftVehicleView[];
   withoutDriverCount: number;
   riskLevel: 'low' | 'medium' | 'high';
   risks: string[];
@@ -358,6 +395,36 @@ export class EquipmentPlansService {
     return [user.lastName, user.firstName, user.middleName]
       .filter(Boolean)
       .join(' ');
+  }
+
+  private formatDraftVehicle(
+    vehicle: DraftVehicleRecord,
+  ): EquipmentPlanDraftVehicleView {
+    const driver = vehicle.assignedDriver;
+
+    return {
+      id: vehicle.id,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      plateNumber: vehicle.plateNumber,
+      type: vehicle.type,
+      status: vehicle.status,
+      assignedDriver: driver
+        ? {
+            userId: driver.userId,
+            fullName: this.getFullName(driver.user),
+          }
+        : null,
+    };
+  }
+
+  private sortDraftVehicles(a: DraftVehicleRecord, b: DraftVehicleRecord) {
+    if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
+    if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
+    return `${a.brand} ${a.model} ${a.plateNumber}`.localeCompare(
+      `${b.brand} ${b.model} ${b.plateNumber}`,
+      'ru',
+    );
   }
 
   private addDays(date: Date, days: number) {
@@ -998,12 +1065,7 @@ export class EquipmentPlansService {
 
     const [vehicles, existingPlans] = await Promise.all([
       this.prisma.fleetVehicle.findMany({
-        select: {
-          id: true,
-          type: true,
-          status: true,
-          assignedDriverUserId: true,
-        },
+        select: draftVehicleSelect,
       }),
       this.prisma.equipmentPlanAssignment.findMany({
         where: {
@@ -1057,15 +1119,28 @@ export class EquipmentPlansService {
               (vehicle.status === 'active' || vehicle.status === 'reserve') &&
               !vehicle.assignedDriverUserId,
           ).length;
-          const conflictCount = new Set(
-            existingPlans
-              .filter(
-                (plan) =>
-                  plan.vehicle.type === rule.vehicleType &&
-                  stageDateKeys.has(this.dateKey(plan.workDate)),
-              )
-              .map((plan) => plan.vehicleId),
-          ).size;
+          const occupiedVehicleIds = [
+            ...new Set(
+              existingPlans
+                .filter(
+                  (plan) =>
+                    plan.vehicle.type === rule.vehicleType &&
+                    stageDateKeys.has(this.dateKey(plan.workDate)),
+                )
+                .map((plan) => plan.vehicleId),
+            ),
+          ];
+          const conflictCount = occupiedVehicleIds.length;
+          const occupiedVehicleIdSet = new Set(occupiedVehicleIds);
+          const availableVehicles = vehicles
+            .filter(
+              (vehicle) =>
+                vehicle.type === rule.vehicleType &&
+                (vehicle.status === 'active' || vehicle.status === 'reserve') &&
+                !occupiedVehicleIdSet.has(vehicle.id),
+            )
+            .sort((a, b) => this.sortDraftVehicles(a, b))
+            .map((vehicle) => this.formatDraftVehicle(vehicle));
 
           const { risks, riskLevel } = this.buildDraftRisk({
             requiredCount,
@@ -1086,6 +1161,8 @@ export class EquipmentPlansService {
             availableCount,
             repairCount,
             conflictCount,
+            occupiedVehicleIds,
+            availableVehicles,
             withoutDriverCount,
             riskLevel,
             risks,
