@@ -309,6 +309,69 @@ function getDateRange(tasks: GanttTask[]) {
   return { min, max, totalDays: Math.max(diffDays(min, max) + 1, 1) }
 }
 
+function formatGanttMonth(value: string | Date) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value))
+}
+
+function formatWeekday(value: string | Date) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    weekday: "short",
+  })
+    .format(new Date(value))
+    .replace(".", "")
+}
+
+function getTimelineDays(range: NonNullable<ReturnType<typeof getDateRange>>) {
+  return Array.from({ length: range.totalDays }, (_, index) => {
+    const date = new Date(range.min)
+    date.setDate(date.getDate() + index)
+    return date
+  })
+}
+
+function getTimelineMonths(days: Date[]) {
+  const months: { key: string; label: string; start: number; span: number }[] = []
+
+  days.forEach((day, index) => {
+    const key = `${day.getFullYear()}-${day.getMonth()}`
+    const last = months[months.length - 1]
+
+    if (last?.key === key) {
+      last.span += 1
+      return
+    }
+
+    months.push({
+      key,
+      label: formatGanttMonth(day),
+      start: index + 1,
+      span: 1,
+    })
+  })
+
+  return months
+}
+
+function getTaskDurationDays(task: GanttTask) {
+  return diffDays(new Date(task.startDate), new Date(task.endDate)) + 1
+}
+
+function getTaskGridPosition(
+  range: NonNullable<ReturnType<typeof getDateRange>>,
+  task: GanttTask
+) {
+  const start = new Date(task.startDate)
+  start.setHours(0, 0, 0, 0)
+
+  return {
+    startColumn: diffDays(range.min, start) + 1,
+    span: Math.max(getTaskDurationDays(task), 1),
+  }
+}
+
 function hasVehicleConflict(
   vehicleId: string,
   workDates: string[],
@@ -360,66 +423,143 @@ function buildDefaultSelections(
 
 function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: string }) {
   const range = useMemo(() => getDateRange(tasks), [tasks])
-  const ticks = useMemo(() => {
-    if (!range) return []
-
-    return Array.from({ length: range.totalDays }, (_, index) => {
-      const date = new Date(range.min)
-      date.setDate(date.getDate() + index)
-      return date
-    })
-  }, [range])
+  const days = useMemo(() => (range ? getTimelineDays(range) : []), [range])
+  const months = useMemo(() => getTimelineMonths(days), [days])
+  const dayColumnWidth = 42
+  const timelineWidth = Math.max(days.length * dayColumnWidth, 560)
 
   if (!range) {
     return (
-      <div className="rounded-md border p-6 text-sm text-muted-foreground">
+      <div className="rounded-md border bg-muted/20 p-6 text-sm text-muted-foreground">
         {emptyText}
       </div>
     )
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border">
-      <div className="min-w-[860px] p-4">
-        <div
-          className="grid pl-64 text-[11px] text-muted-foreground"
-          style={{
-            gridTemplateColumns: `repeat(${ticks.length}, minmax(32px, 1fr))`,
-          }}
-        >
-          {ticks.map((tick) => (
-            <span key={tick.toISOString()} className="text-center">
-              {formatShortDate(tick.toISOString())}
-            </span>
+    <div className="overflow-hidden rounded-md border bg-card">
+      <div className="flex max-w-full overflow-x-auto">
+        <div className="sticky left-0 z-20 w-[410px] shrink-0 border-r bg-card shadow-[8px_0_18px_-18px_rgb(0_0_0_/_25%)]">
+          <div className="grid h-16 grid-cols-[44px_minmax(0,1fr)_96px_82px] border-b bg-muted/30 text-xs font-medium text-muted-foreground">
+            <div className="flex items-center justify-center border-r">#</div>
+            <div className="flex items-center border-r px-3">Этап</div>
+            <div className="flex items-center border-r px-3">Начало</div>
+            <div className="flex items-center px-3">Дней</div>
+          </div>
+
+          {tasks.map((task, index) => (
+            <div
+              key={task.id}
+              className={cn(
+                "grid h-14 grid-cols-[44px_minmax(0,1fr)_96px_82px] border-b text-sm last:border-b-0",
+                index % 2 === 0 ? "bg-background" : "bg-muted/15"
+              )}
+            >
+              <div className="flex items-center justify-center border-r text-xs tabular-nums text-muted-foreground">
+                {index + 1}
+              </div>
+              <div className="flex min-w-0 flex-col justify-center border-r px-3">
+                <p className="truncate font-medium">{task.name}</p>
+                {task.subtitle && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {task.subtitle}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center border-r px-3 text-xs tabular-nums text-muted-foreground">
+                {formatShortDate(task.startDate)}
+              </div>
+              <div className="flex items-center px-3 text-xs tabular-nums text-muted-foreground">
+                {getTaskDurationDays(task)}
+              </div>
+            </div>
           ))}
         </div>
 
-        <div className="mt-3 flex flex-col gap-2">
-          {tasks.map((task) => {
-            const start = new Date(task.startDate)
-            const end = new Date(task.endDate)
-            const left = (diffDays(range.min, start) / range.totalDays) * 100
-            const width = ((diffDays(start, end) + 1) / range.totalDays) * 100
+        <div className="min-w-0" style={{ width: timelineWidth }}>
+          <div
+            className="grid h-8 border-b bg-muted/30 text-xs font-medium text-muted-foreground"
+            style={{
+              gridTemplateColumns: `repeat(${days.length}, ${dayColumnWidth}px)`,
+              width: timelineWidth,
+            }}
+          >
+            {months.map((month) => (
+              <div
+                key={month.key}
+                className="flex items-center justify-center border-r capitalize"
+                style={{
+                  gridColumn: `${month.start} / span ${month.span}`,
+                }}
+              >
+                {month.label}
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="grid h-8 border-b bg-muted/15 text-[11px] text-muted-foreground"
+            style={{
+              gridTemplateColumns: `repeat(${days.length}, ${dayColumnWidth}px)`,
+              width: timelineWidth,
+            }}
+          >
+            {days.map((day) => {
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6
+
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "flex flex-col items-center justify-center border-r leading-none",
+                    isWeekend && "bg-muted/40 text-muted-foreground"
+                  )}
+                >
+                  <span className="font-medium tabular-nums">
+                    {day.getDate()}
+                  </span>
+                  <span className="mt-1 uppercase">{formatWeekday(day)}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {tasks.map((task, index) => {
+            const position = getTaskGridPosition(range, task)
 
             return (
               <div
                 key={task.id}
-                className="grid grid-cols-[15rem_minmax(560px,1fr)] items-center gap-4"
+                className="relative grid h-14 border-b last:border-b-0"
+                style={{
+                  gridTemplateColumns: `repeat(${days.length}, ${dayColumnWidth}px)`,
+                  width: timelineWidth,
+                }}
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{task.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {task.subtitle}
-                  </p>
-                </div>
-                <div className="relative h-9 rounded-md bg-muted">
-                  <div
-                    className="absolute top-1 h-7 rounded-md bg-primary/80"
-                    style={{
-                      left: `${left}%`,
-                      width: `${Math.max(width, 3)}%`,
-                    }}
-                  />
+                {days.map((day) => {
+                  const isWeekend = day.getDay() === 0 || day.getDay() === 6
+
+                  return (
+                    <div
+                      key={`${task.id}-${day.toISOString()}`}
+                      className={cn(
+                        "border-r",
+                        index % 2 === 0 ? "bg-background" : "bg-muted/15",
+                        isWeekend && "bg-muted/35"
+                      )}
+                    />
+                  )
+                })}
+
+                <div
+                  className="z-10 my-auto flex h-7 min-w-0 items-center rounded-sm border border-primary/70 bg-primary px-2 text-xs font-medium text-primary-foreground shadow-sm"
+                  style={{
+                    gridColumn: `${position.startColumn} / span ${position.span}`,
+                    gridRow: "1",
+                  }}
+                  title={`${task.name}: ${formatDate(task.startDate)} - ${formatDate(task.endDate)}`}
+                >
+                  <span className="truncate">{task.name}</span>
                 </div>
               </div>
             )
