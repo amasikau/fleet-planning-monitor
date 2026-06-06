@@ -31,10 +31,6 @@ export class ApplyEquipmentPlanDraftDto extends GenerateEquipmentPlanDraftDto {
   createAssignments?: boolean;
 
   @IsOptional()
-  @IsBoolean()
-  replaceExisting?: boolean;
-
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SelectedEquipmentAssignmentDto)

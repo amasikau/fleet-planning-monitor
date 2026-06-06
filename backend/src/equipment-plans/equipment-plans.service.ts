@@ -1072,6 +1072,7 @@ export class EquipmentPlansService {
       }),
       this.prisma.equipmentPlanAssignment.findMany({
         where: {
+          siteId: dto.replaceExisting ? { not: site.id } : undefined,
           workDate: {
             gte: startDate,
             lte: searchEndDate,

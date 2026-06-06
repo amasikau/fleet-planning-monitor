@@ -155,6 +155,10 @@ export class GenerateEquipmentPlanDraftDto {
   autoSchedule?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  replaceExisting?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => EquipmentPlanDraftStageDto)

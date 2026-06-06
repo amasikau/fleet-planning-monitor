@@ -972,6 +972,7 @@ function PlanWizardDialog({
     shiftHours: workType?.defaultShiftHours ?? 8,
     haulDistanceKm: workType?.defaultHaulDistanceKm ?? 12,
     ...(options?.autoSchedule ? { autoSchedule: true } : {}),
+    ...(hasExistingPlan ? { replaceExisting: true } : {}),
     stages: stages.map((stage, index) => ({
       templateStageId: stage.templateStageId,
       type: stage.type,
@@ -1053,7 +1054,6 @@ function PlanWizardDialog({
       await api.equipmentPlans.applyDraft({
         ...buildPayload(),
         createAssignments: true,
-        replaceExisting: hasExistingPlan,
         selectedAssignments: Object.entries(selectedVehicles).map(
           ([key, vehicleIds]) => {
             const [stageSequence, vehicleType] = key.split(":")
