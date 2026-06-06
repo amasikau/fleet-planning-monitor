@@ -42,6 +42,7 @@ import {
   SERVICE_EVENT_STATUS_LABELS,
   SERVICE_EVENT_TYPE_LABELS,
 } from "@/lib/types"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -153,6 +154,13 @@ type GanttTask = {
   startDate: string
   endDate: string
   subtitle?: string
+}
+
+type AvailabilitySuggestion = {
+  startDate: string
+  endDate: string
+  delayDays: number
+  vehicles: FleetVehicle[]
 }
 
 function todayInput() {
@@ -419,6 +427,60 @@ function buildDefaultSelections(
   })
 
   return result
+}
+
+function findFutureAvailabilitySuggestion({
+  vehicleType,
+  requiredCount,
+  startDate,
+  durationDays,
+  vehicles,
+  plans,
+  ignoredSiteId,
+}: {
+  vehicleType: FleetVehicleType
+  requiredCount: number
+  startDate: string
+  durationDays: number
+  vehicles: FleetVehicle[]
+  plans: EquipmentPlan[]
+  ignoredSiteId?: string
+}): AvailabilitySuggestion | null {
+  const pool = vehicles
+    .filter((vehicle) => vehicle.type === vehicleType && vehicle.status !== "repair")
+    .sort((a, b) => {
+      if (a.assignedDriver && !b.assignedDriver) return -1
+      if (!a.assignedDriver && b.assignedDriver) return 1
+      return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
+    })
+
+  if (pool.length < requiredCount) return null
+
+  for (let delayDays = 1; delayDays <= 90; delayDays += 1) {
+    const shiftedStartDate = addDays(startDate, delayDays)
+    const shiftedEndDate = addDays(startDate, delayDays + durationDays - 1)
+    const shiftedWorkDates = datesBetween(shiftedStartDate, shiftedEndDate)
+    const freeVehicles = pool.filter(
+      (vehicle) =>
+        !hasVehicleConflict(
+          vehicle.id,
+          shiftedWorkDates,
+          plans,
+          ignoredSiteId
+        )
+    )
+
+    if (freeVehicles.length >= requiredCount) {
+      return {
+        startDate: shiftedStartDate,
+        endDate: shiftedEndDate,
+        delayDays,
+        vehicles: freeVehicles.slice(0, requiredCount),
+      }
+    }
+  }
+
+  return null
 }
 
 function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: string }) {
@@ -1017,6 +1079,54 @@ function PlanWizardDialog({
     }
   }
 
+  const applyAvailabilitySuggestion = (
+    stageSequence: number,
+    vehicleType: FleetVehicleType,
+    suggestion: AvailabilitySuggestion
+  ) => {
+    if (!draft) return
+
+    const shiftedDraft: EquipmentPlanDraft = {
+      ...draft,
+      stages: draft.stages.map((stage) =>
+        stage.sequence >= stageSequence
+          ? {
+              ...stage,
+              startOffsetDays: stage.startOffsetDays + suggestion.delayDays,
+              startDate: addDays(stage.startDate, suggestion.delayDays),
+              endDate: addDays(stage.endDate, suggestion.delayDays),
+            }
+          : stage
+      ),
+    }
+    const key = demandKey(stageSequence, vehicleType)
+    const defaults = buildDefaultSelections(
+      shiftedDraft,
+      vehicles,
+      allPlans,
+      hasExistingPlan ? site?.id : undefined
+    )
+
+    setStages((items) =>
+      items.map((stage) =>
+        stage.sequence >= stageSequence
+          ? {
+              ...stage,
+              startOffsetDays: stage.startOffsetDays + suggestion.delayDays,
+            }
+          : stage
+      )
+    )
+    setDraft(shiftedDraft)
+    setSelectedVehicles({
+      ...defaults,
+      [key]: suggestion.vehicles.map((vehicle) => vehicle.id),
+    })
+    toast.success(
+      `Этап сдвинут на ${suggestion.delayDays} дн.; техника назначена на ближайшее свободное окно`
+    )
+  }
+
   const stepLabels = ["Исходные данные", "Этапы", "Свободная техника", "Итог"]
   const stageTasks = draft
     ? draft.stages.map((stage) => ({
@@ -1222,6 +1332,22 @@ function PlanWizardDialog({
                           return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
                         })
                       const selected = selectedVehicles[key] ?? []
+                      const shortage = Math.max(
+                        demand.requiredCount - candidates.length,
+                        0
+                      )
+                      const availabilitySuggestion =
+                        shortage > 0
+                          ? findFutureAvailabilitySuggestion({
+                              vehicleType: demand.vehicleType,
+                              requiredCount: demand.requiredCount,
+                              startDate: stage.startDate,
+                              durationDays: stage.durationDays,
+                              vehicles,
+                              plans: allPlans,
+                              ignoredSiteId: hasExistingPlan ? site?.id : undefined,
+                            })
+                          : null
 
                       return (
                         <div key={key} className="rounded-md bg-muted p-3">
@@ -1237,52 +1363,102 @@ function PlanWizardDialog({
                             {demand.calculationNote}
                           </p>
                           <div className="mt-3 flex flex-col gap-2">
-                            {candidates.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">
-                                Свободной техники этого типа нет.
-                              </p>
-                            ) : (
-                              candidates.map((vehicle) => (
-                                <label
-                                  key={vehicle.id}
-                                  className="flex items-start gap-3 rounded-md border bg-background p-2"
-                                >
-                                  <Checkbox
-                                    checked={selected.includes(vehicle.id)}
-                                    onCheckedChange={() => {
-                                      const current = selectedVehicles[key] ?? []
-                                      const exists = current.includes(vehicle.id)
-                                      const next = exists
-                                        ? current.filter((id) => id !== vehicle.id)
-                                        : current.length < demand.requiredCount
-                                          ? [...current, vehicle.id]
-                                          : current
-
-                                      if (!exists && current.length >= demand.requiredCount) {
-                                        toast.warning(
-                                          `Для этапа нужно ${demand.requiredCount} ед. техники`
-                                        )
-                                      }
-
-                                      setSelectedVehicles((prev) => ({
-                                        ...prev,
-                                        [key]: next,
-                                      }))
-                                    }}
-                                  />
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-sm font-medium">
-                                      {vehicleLabel(vehicle)}
-                                    </span>
-                                    <span className="block text-xs text-muted-foreground">
-                                      {vehicle.assignedDriver
-                                        ? vehicle.assignedDriver.fullName
-                                        : "Нет закреплённого водителя"}
-                                    </span>
-                                  </span>
-                                </label>
-                              ))
+                            {shortage > 0 && (
+                              <Alert className="border-primary/25 bg-background">
+                                <AlertTitle>
+                                  {candidates.length === 0
+                                    ? "Свободной техники этого типа нет"
+                                    : `Не хватает ${shortage} ед. техники`}
+                                </AlertTitle>
+                                <AlertDescription className="mt-1 flex flex-col gap-3 text-sm">
+                                  {availabilitySuggestion ? (
+                                    <>
+                                      <p>
+                                        Можно увеличить срок работ: ближайшее
+                                        окно для {demand.requiredCount} ед. -
+                                        с {formatDate(availabilitySuggestion.startDate)}
+                                        {" "}по {formatDate(availabilitySuggestion.endDate)}
+                                        {" "}со сдвигом на {availabilitySuggestion.delayDays} дн.
+                                      </p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {availabilitySuggestion.vehicles.map((vehicle) => (
+                                          <Badge
+                                            key={vehicle.id}
+                                            variant="outline"
+                                            className="bg-card"
+                                          >
+                                            {vehicleLabel(vehicle)}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="w-fit"
+                                        onClick={() =>
+                                          applyAvailabilitySuggestion(
+                                            stage.sequence,
+                                            demand.vehicleType,
+                                            availabilitySuggestion
+                                          )
+                                        }
+                                      >
+                                        Сдвинуть этап и назначить
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <p>
+                                      В ближайшие 90 дней нет окна, где
+                                      одновременно свободно нужное количество
+                                      исправной техники. Уменьшите потребность
+                                      этапа или добавьте технику в парк.
+                                    </p>
+                                  )}
+                                </AlertDescription>
+                              </Alert>
                             )}
+
+                            {candidates.map((vehicle) => (
+                              <label
+                                key={vehicle.id}
+                                className="flex items-start gap-3 rounded-md border bg-background p-2"
+                              >
+                                <Checkbox
+                                  checked={selected.includes(vehicle.id)}
+                                  onCheckedChange={() => {
+                                    const current = selectedVehicles[key] ?? []
+                                    const exists = current.includes(vehicle.id)
+                                    const next = exists
+                                      ? current.filter((id) => id !== vehicle.id)
+                                      : current.length < demand.requiredCount
+                                        ? [...current, vehicle.id]
+                                        : current
+
+                                    if (!exists && current.length >= demand.requiredCount) {
+                                      toast.warning(
+                                        `Для этапа нужно ${demand.requiredCount} ед. техники`
+                                      )
+                                    }
+
+                                    setSelectedVehicles((prev) => ({
+                                      ...prev,
+                                      [key]: next,
+                                    }))
+                                  }}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-medium">
+                                    {vehicleLabel(vehicle)}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {vehicle.assignedDriver
+                                      ? vehicle.assignedDriver.fullName
+                                      : "Нет закреплённого водителя"}
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
                           </div>
                         </div>
                       )
