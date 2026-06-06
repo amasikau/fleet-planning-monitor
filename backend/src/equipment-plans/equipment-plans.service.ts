@@ -332,6 +332,14 @@ export class EquipmentPlansService {
     return date;
   }
 
+  private dateKey(value: Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  private planSlotKey(vehicleId: string, workDate: Date, shift: EquipmentPlanShift) {
+    return `${vehicleId}:${this.dateKey(workDate)}:${shift}`;
+  }
+
   private normalizeOptionalId(value?: string | null) {
     return value?.trim() ? value : null;
   }
@@ -1019,7 +1027,7 @@ export class EquipmentPlansService {
       const stageEnd = this.addDays(stageStart, stage.durationDays - 1);
       const stageDateKeys = new Set(
         this.daysBetweenInclusive(stageStart, stageEnd).map((date) =>
-          date.toISOString(),
+          this.dateKey(date),
         ),
       );
 
@@ -1054,7 +1062,7 @@ export class EquipmentPlansService {
               .filter(
                 (plan) =>
                   plan.vehicle.type === rule.vehicleType &&
-                  stageDateKeys.has(plan.workDate.toISOString()),
+                  stageDateKeys.has(this.dateKey(plan.workDate)),
               )
               .map((plan) => plan.vehicleId),
           ).size;
@@ -1182,6 +1190,9 @@ export class EquipmentPlansService {
       select: {
         id: true,
         type: true,
+        brand: true,
+        model: true,
+        plateNumber: true,
         assignedDriverUserId: true,
       },
     });
@@ -1203,9 +1214,7 @@ export class EquipmentPlansService {
       select: { vehicleId: true, workDate: true, shift: true },
     });
     existingPlans.forEach((plan) => {
-      occupied.add(
-        `${plan.vehicleId}:${plan.workDate.toISOString()}:${plan.shift}`,
-      );
+      occupied.add(this.planSlotKey(plan.vehicleId, plan.workDate, plan.shift));
     });
 
     await this.prisma.$transaction(async (tx) => {
@@ -1273,9 +1282,35 @@ export class EquipmentPlansService {
                     return a.id.localeCompare(b.id);
                   });
 
+            if (selectedVehicleIds?.length) {
+              const missingSelected = selectedVehicleIds.filter(
+                (id) => !sourceVehicles.some((vehicle) => vehicle.id === id),
+              );
+              if (missingSelected.length > 0) {
+                throw new ConflictException(
+                  'Выбранная техника недоступна, находится не в рабочем статусе или не соответствует требуемому типу.',
+                );
+              }
+
+              const busySelected = sourceVehicles.filter((vehicle) =>
+                occupied.has(this.planSlotKey(vehicle.id, workDate, 'day')),
+              );
+              if (busySelected.length > 0) {
+                const busyLabels = busySelected
+                  .map(
+                    (vehicle) =>
+                      `${vehicle.brand} ${vehicle.model} ${vehicle.plateNumber}`,
+                  )
+                  .join(', ');
+                throw new ConflictException(
+                  `Выбранная техника уже занята ${this.dateKey(workDate)}: ${busyLabels}. Выберите другую технику или сдвиньте этап.`,
+                );
+              }
+            }
+
             const assignedForDate = sourceVehicles
               .filter((vehicle) => {
-                const key = `${vehicle.id}:${workDate.toISOString()}:day`;
+                const key = this.planSlotKey(vehicle.id, workDate, 'day');
                 return !occupied.has(key);
               })
               .slice(0, demand.requiredCount);
@@ -1286,7 +1321,7 @@ export class EquipmentPlansService {
             );
 
             for (const vehicle of assignedForDate) {
-              const key = `${vehicle.id}:${workDate.toISOString()}:day`;
+              const key = this.planSlotKey(vehicle.id, workDate, 'day');
               occupied.add(key);
               await tx.equipmentPlanAssignment.create({
                 data: {

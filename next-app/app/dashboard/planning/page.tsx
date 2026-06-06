@@ -411,7 +411,7 @@ function buildDefaultSelections(
         .filter(
           (vehicle) =>
             vehicle.type === demand.vehicleType &&
-            vehicle.status !== "repair" &&
+            (vehicle.status === "active" || vehicle.status === "reserve") &&
             !hasVehicleConflict(vehicle.id, workDates, plans, ignoredSiteId)
         )
         .sort((a, b) => {
@@ -447,7 +447,11 @@ function findFutureAvailabilitySuggestion({
   ignoredSiteId?: string
 }): AvailabilitySuggestion | null {
   const pool = vehicles
-    .filter((vehicle) => vehicle.type === vehicleType && vehicle.status !== "repair")
+    .filter(
+      (vehicle) =>
+        vehicle.type === vehicleType &&
+        (vehicle.status === "active" || vehicle.status === "reserve")
+    )
     .sort((a, b) => {
       if (a.assignedDriver && !b.assignedDriver) return -1
       if (!a.assignedDriver && b.assignedDriver) return 1
@@ -940,6 +944,7 @@ function PlanWizardDialog({
   const [stages, setStages] = useState<DraftStage[]>([])
   const [draft, setDraft] = useState<EquipmentPlanDraft | null>(null)
   const [selectedVehicles, setSelectedVehicles] = useState<SelectedVehicles>({})
+  const [planningPlans, setPlanningPlans] = useState<EquipmentPlan[]>([])
   const [stageEditorOpen, setStageEditorOpen] = useState(false)
   const [editingStage, setEditingStage] = useState<DraftStage | null>(null)
   const [stageEditorKey, setStageEditorKey] = useState(0)
@@ -958,7 +963,8 @@ function PlanWizardDialog({
     setStages(first ? scaleTemplateStages(first, first.defaultLengthKm) : [])
     setDraft(null)
     setSelectedVehicles({})
-  }, [open, workTypes])
+    setPlanningPlans(allPlans)
+  }, [allPlans, open, workTypes])
 
   const handleWorkTypeChange = (id: string) => {
     const next = workTypes.find((item) => item.id === id) ?? null
@@ -1036,10 +1042,17 @@ function PlanWizardDialog({
 
     try {
       setLoading(true)
+      const latestPlans = await api.equipmentPlans.getAll()
       const result = await api.equipmentPlans.generateDraft(buildPayload())
+      setPlanningPlans(latestPlans)
       setDraft(result)
       setSelectedVehicles(
-        buildDefaultSelections(result, vehicles, allPlans, hasExistingPlan ? site.id : undefined)
+        buildDefaultSelections(
+          result,
+          vehicles,
+          latestPlans,
+          hasExistingPlan ? site.id : undefined
+        )
       )
       setStep(2)
     } catch (error) {
@@ -1103,7 +1116,7 @@ function PlanWizardDialog({
     const defaults = buildDefaultSelections(
       shiftedDraft,
       vehicles,
-      allPlans,
+      planningPlans,
       hasExistingPlan ? site?.id : undefined
     )
 
@@ -1318,11 +1331,12 @@ function PlanWizardDialog({
                         .filter(
                           (vehicle) =>
                             vehicle.type === demand.vehicleType &&
-                            vehicle.status !== "repair" &&
+                            (vehicle.status === "active" ||
+                              vehicle.status === "reserve") &&
                             !hasVehicleConflict(
                               vehicle.id,
                               workDates,
-                              allPlans,
+                              planningPlans,
                               hasExistingPlan ? site?.id : undefined
                             )
                         )
@@ -1344,7 +1358,7 @@ function PlanWizardDialog({
                               startDate: stage.startDate,
                               durationDays: stage.durationDays,
                               vehicles,
-                              plans: allPlans,
+                              plans: planningPlans,
                               ignoredSiteId: hasExistingPlan ? site?.id : undefined,
                             })
                           : null
