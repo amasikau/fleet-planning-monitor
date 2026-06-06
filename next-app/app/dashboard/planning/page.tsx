@@ -383,14 +383,12 @@ function getTaskGridPosition(
 function hasVehicleConflict(
   vehicleId: string,
   workDates: string[],
-  plans: EquipmentPlan[],
-  ignoredSiteId?: string
+  plans: EquipmentPlan[]
 ) {
   return plans.some(
     (plan) =>
       plan.vehicleId === vehicleId &&
       plan.status !== "failed" &&
-      plan.siteId !== ignoredSiteId &&
       workDates.includes(dateKey(plan.workDate))
   )
 }
@@ -398,8 +396,7 @@ function hasVehicleConflict(
 function buildDefaultSelections(
   draft: EquipmentPlanDraft,
   vehicles: FleetVehicle[],
-  plans: EquipmentPlan[],
-  ignoredSiteId?: string
+  plans: EquipmentPlan[]
 ) {
   const result: SelectedVehicles = {}
 
@@ -412,7 +409,7 @@ function buildDefaultSelections(
           (vehicle) =>
             vehicle.type === demand.vehicleType &&
             (vehicle.status === "active" || vehicle.status === "reserve") &&
-            !hasVehicleConflict(vehicle.id, workDates, plans, ignoredSiteId)
+            !hasVehicleConflict(vehicle.id, workDates, plans)
         )
         .sort((a, b) => {
           if (a.assignedDriver && !b.assignedDriver) return -1
@@ -436,7 +433,6 @@ function findFutureAvailabilitySuggestion({
   durationDays,
   vehicles,
   plans,
-  ignoredSiteId,
 }: {
   vehicleType: FleetVehicleType
   requiredCount: number
@@ -444,7 +440,6 @@ function findFutureAvailabilitySuggestion({
   durationDays: number
   vehicles: FleetVehicle[]
   plans: EquipmentPlan[]
-  ignoredSiteId?: string
 }): AvailabilitySuggestion | null {
   const pool = vehicles
     .filter(
@@ -466,12 +461,7 @@ function findFutureAvailabilitySuggestion({
     const shiftedWorkDates = datesBetween(shiftedStartDate, shiftedEndDate)
     const freeVehicles = pool.filter(
       (vehicle) =>
-        !hasVehicleConflict(
-          vehicle.id,
-          shiftedWorkDates,
-          plans,
-          ignoredSiteId
-        )
+        !hasVehicleConflict(vehicle.id, shiftedWorkDates, plans)
     )
 
     if (freeVehicles.length >= requiredCount) {
@@ -1050,8 +1040,7 @@ function PlanWizardDialog({
         buildDefaultSelections(
           result,
           vehicles,
-          latestPlans,
-          hasExistingPlan ? site.id : undefined
+          latestPlans
         )
       )
       setStep(2)
@@ -1116,8 +1105,7 @@ function PlanWizardDialog({
     const defaults = buildDefaultSelections(
       shiftedDraft,
       vehicles,
-      planningPlans,
-      hasExistingPlan ? site?.id : undefined
+      planningPlans
     )
 
     setStages((items) =>
@@ -1336,8 +1324,7 @@ function PlanWizardDialog({
                             !hasVehicleConflict(
                               vehicle.id,
                               workDates,
-                              planningPlans,
-                              hasExistingPlan ? site?.id : undefined
+                              planningPlans
                             )
                         )
                         .sort((a, b) => {
@@ -1359,7 +1346,6 @@ function PlanWizardDialog({
                               durationDays: stage.durationDays,
                               vehicles,
                               plans: planningPlans,
-                              ignoredSiteId: hasExistingPlan ? site?.id : undefined,
                             })
                           : null
 
