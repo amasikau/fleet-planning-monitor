@@ -102,7 +102,7 @@ export function AppSidebar({
           url: "/dashboard/service",
         },
         {
-          title: "Справочник ремонтов",
+          title: "Справочник ТО и ремонтов",
           url: "/dashboard/service/repairs",
         },
       ],

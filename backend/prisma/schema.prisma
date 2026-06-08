@@ -199,20 +199,22 @@ model FleetServiceEvent {
 }
 
 model FleetRepairTemplate {
-  id           String              @id @default(uuid())
-  vehicleType  FleetVehicleType
-  category     FleetRepairCategory
-  name         String
-  durationDays Int                 @default(1)
-  sortOrder    Int                 @default(100)
-  notes        String              @default("")
-  isActive     Boolean             @default(true)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  id               String                @id @default(uuid())
+  vehicleType      FleetVehicleType
+  serviceEventType FleetServiceEventType @default(repair)
+  category         FleetRepairCategory
+  name             String
+  durationDays     Int                   @default(1)
+  sortOrder        Int                   @default(100)
+  notes            String                @default("")
+  isActive         Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   serviceEvents FleetServiceEvent[]
 
   @@index([vehicleType])
+  @@index([serviceEventType])
   @@index([category])
   @@index([sortOrder])
   @@index([isActive])

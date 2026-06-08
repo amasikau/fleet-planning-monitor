@@ -21,6 +21,7 @@ import { UpdateServiceEventDto } from './dto/update-service-event.dto';
 export interface RepairTemplateView {
   id: string;
   vehicleType: FleetVehicleType;
+  serviceEventType: FleetServiceEventType;
   category: FleetRepairCategory;
   name: string;
   durationDays: number;
@@ -144,6 +145,7 @@ export class ServiceEventsService {
   private formatTemplate(template: {
     id: string;
     vehicleType: FleetVehicleType;
+    serviceEventType: FleetServiceEventType;
     category: FleetRepairCategory;
     name: string;
     durationDays: number;
@@ -156,6 +158,7 @@ export class ServiceEventsService {
     return {
       id: template.id,
       vehicleType: template.vehicleType,
+      serviceEventType: template.serviceEventType,
       category: template.category,
       name: template.name,
       durationDays: template.durationDays,
@@ -350,7 +353,12 @@ export class ServiceEventsService {
 
     const templates = await this.prisma.fleetRepairTemplate.findMany({
       where,
-      orderBy: [{ vehicleType: 'asc' }, { category: 'asc' }, { name: 'asc' }],
+      orderBy: [
+        { vehicleType: 'asc' },
+        { serviceEventType: 'asc' },
+        { category: 'asc' },
+        { name: 'asc' },
+      ],
     });
 
     return templates.map((template) => this.formatTemplate(template));
@@ -362,6 +370,7 @@ export class ServiceEventsService {
     const template = await this.prisma.fleetRepairTemplate.create({
       data: {
         vehicleType: dto.vehicleType,
+        serviceEventType: dto.serviceEventType,
         category: dto.category,
         name: dto.name.trim(),
         durationDays: dto.durationDays,
@@ -388,6 +397,7 @@ export class ServiceEventsService {
       where: { id },
       data: {
         vehicleType: dto.vehicleType,
+        serviceEventType: dto.serviceEventType,
         category: dto.category,
         name: dto.name !== undefined ? dto.name.trim() : undefined,
         durationDays: dto.durationDays,
@@ -444,7 +454,7 @@ export class ServiceEventsService {
       data: {
         vehicleId: dto.vehicleId,
         repairTemplateId: template?.id ?? null,
-        type: dto.type,
+        type: template?.serviceEventType ?? dto.type,
         status: 'scheduled',
         title,
         startDate: period.startDate,
@@ -475,6 +485,7 @@ export class ServiceEventsService {
     const updateData: Prisma.FleetServiceEventUpdateInput = {};
     let nextTemplate: FleetRepairTemplate | null = existing.repairTemplate;
 
+    if (dto.type !== undefined) updateData.type = dto.type;
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.repairTemplateId !== undefined) {
       nextTemplate = dto.repairTemplateId
@@ -486,6 +497,9 @@ export class ServiceEventsService {
       updateData.repairTemplate = nextTemplate
         ? { connect: { id: nextTemplate.id } }
         : { disconnect: true };
+      if (nextTemplate) {
+        updateData.type = nextTemplate.serviceEventType;
+      }
     }
     if (
       dto.startDate !== undefined ||

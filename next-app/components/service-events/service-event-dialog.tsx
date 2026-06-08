@@ -108,6 +108,15 @@ function createInitialForm(
   }
 }
 
+function getTemplateServiceEventType(
+  template: Pick<RepairTemplate, "serviceEventType" | "category">
+): ServiceEventType {
+  if (template.serviceEventType) return template.serviceEventType
+  if (template.category === "diagnostics") return "diagnostics"
+  if (template.category === "scheduled_service") return "maintenance"
+  return "repair"
+}
+
 export function ServiceEventDialog({
   open,
   onOpenChange,
@@ -143,10 +152,12 @@ export function ServiceEventDialog({
     const q = templateSearch.trim().toLowerCase()
     return availableTemplates
       .filter((template) => {
+        const templateType = getTemplateServiceEventType(template)
         if (!q) return true
         return (
           template.name.toLowerCase().includes(q) ||
           template.notes.toLowerCase().includes(q) ||
+          SERVICE_EVENT_TYPE_LABELS[templateType].toLowerCase().includes(q) ||
           FLEET_REPAIR_CATEGORY_LABELS[template.category]
             .toLowerCase()
             .includes(q)
@@ -166,19 +177,13 @@ export function ServiceEventDialog({
       })()
     : ""
 
-  const getTemplateEventType = (template: RepairTemplate): ServiceEventType => {
-    if (template.category === "diagnostics") return "diagnostics"
-    if (template.category === "scheduled_service") return "maintenance"
-    return "repair"
-  }
-
   const applyTemplate = (template: RepairTemplate) => {
     setForm((prev) => ({
       ...prev,
       repairTemplateId: template.id,
       title: template.name,
       durationDays: template.durationDays,
-      type: getTemplateEventType(template),
+      type: getTemplateServiceEventType(template),
     }))
     setShowDirectory(false)
     setTemplateSearch("")
@@ -515,12 +520,18 @@ export function ServiceEventDialog({
 
               {selectedTemplate && (
                 <div className="rounded-lg border bg-muted/30 p-3 sm:col-span-2">
-                  <p className="text-xs text-muted-foreground">
-                    Раздел ремонта
-                  </p>
-                  <p className="mt-1 text-sm font-medium">
-                    {FLEET_REPAIR_CATEGORY_LABELS[selectedTemplate.category]}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {
+                        SERVICE_EVENT_TYPE_LABELS[
+                          getTemplateServiceEventType(selectedTemplate)
+                        ]
+                      }
+                    </Badge>
+                    <Badge variant="secondary" className="text-xs">
+                      {FLEET_REPAIR_CATEGORY_LABELS[selectedTemplate.category]}
+                    </Badge>
+                  </div>
                   {selectedTemplate.notes && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {selectedTemplate.notes}
@@ -743,11 +754,11 @@ export function ServiceEventDialog({
       <Dialog open={showDirectory} onOpenChange={setShowDirectory}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="shrink-0 px-6 pt-6 pr-14">
-            <DialogTitle>Справочник ремонтов</DialogTitle>
+            <DialogTitle>Справочник ТО и ремонтов</DialogTitle>
             <DialogDescription>
               {selectedVehicle
-                ? `Показаны ремонты только для типа техники: ${FLEET_VEHICLE_TYPE_LABELS[selectedVehicle.type]}.`
-                : "Выберите технику в заявке, чтобы открыть подходящие ремонты."}
+                ? `Показаны позиции только для типа техники: ${FLEET_VEHICLE_TYPE_LABELS[selectedVehicle.type]}.`
+                : "Выберите технику в заявке, чтобы открыть подходящие позиции."}
             </DialogDescription>
           </DialogHeader>
 
@@ -776,7 +787,7 @@ export function ServiceEventDialog({
               </div>
             ) : filteredTemplates.length === 0 ? (
               <div className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                Для выбранного типа техники ремонты не найдены.
+                Для выбранного типа техники позиции справочника не найдены.
               </div>
             ) : (
               <div className="grid gap-2">
@@ -791,6 +802,13 @@ export function ServiceEventDialog({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium">{template.name}</p>
+                          <Badge variant="outline" className="text-xs">
+                            {
+                              SERVICE_EVENT_TYPE_LABELS[
+                                getTemplateServiceEventType(template)
+                              ]
+                            }
+                          </Badge>
                           <Badge variant="secondary" className="text-xs">
                             {FLEET_REPAIR_CATEGORY_LABELS[template.category]}
                           </Badge>

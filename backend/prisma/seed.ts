@@ -259,7 +259,8 @@ async function main() {
       nextMaintenanceKm: 85000,
       insuranceExpiresAt: new Date('2026-05-02T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-06-16T00:00:00.000Z'),
-      notes: 'Грузовой самосвал из ведомости автотранспорта, подвоз щебня и асфальтобетонной смеси.',
+      notes:
+        'Грузовой самосвал из ведомости автотранспорта, подвоз щебня и асфальтобетонной смеси.',
     },
   });
 
@@ -281,7 +282,8 @@ async function main() {
       nextMaintenanceKm: 127000,
       insuranceExpiresAt: new Date('2026-05-21T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-04-27T00:00:00.000Z'),
-      notes: 'Грузовой самосвал МАЗ из ведомости, стоит на ТО с ревизией гидролинии.',
+      notes:
+        'Грузовой самосвал МАЗ из ведомости, стоит на ТО с ревизией гидролинии.',
     },
   });
 
@@ -303,7 +305,8 @@ async function main() {
       nextMaintenanceKm: 50000,
       insuranceExpiresAt: new Date('2026-04-29T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-05-19T00:00:00.000Z'),
-      notes: 'Автомобильный кран из раздела автотранспорта, используется на монтаже временных ограждений.',
+      notes:
+        'Автомобильный кран из раздела автотранспорта, используется на монтаже временных ограждений.',
     },
   });
 
@@ -325,7 +328,8 @@ async function main() {
       nextMaintenanceKm: 158500,
       insuranceExpiresAt: new Date('2026-04-14T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-04-11T00:00:00.000Z'),
-      notes: 'Экскаватор гусеничный из ведомости ДСМ, выведен в ремонт после замечаний по гидравлике.',
+      notes:
+        'Экскаватор гусеничный из ведомости ДСМ, выведен в ремонт после замечаний по гидравлике.',
     },
   });
 
@@ -347,7 +351,8 @@ async function main() {
       nextMaintenanceKm: 25000,
       insuranceExpiresAt: new Date('2026-07-02T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-08-18T00:00:00.000Z'),
-      notes: 'Автомобиль для подвоза знаков, конусов, инструмента и мелких запчастей.',
+      notes:
+        'Автомобиль для подвоза знаков, конусов, инструмента и мелких запчастей.',
     },
   });
 
@@ -369,7 +374,8 @@ async function main() {
       nextMaintenanceKm: 60000,
       insuranceExpiresAt: new Date('2026-06-12T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-06-29T00:00:00.000Z'),
-      notes: 'Легковой автомобиль из ведомости, используется для оперативных выездов мастера.',
+      notes:
+        'Легковой автомобиль из ведомости, используется для оперативных выездов мастера.',
     },
   });
 
@@ -413,7 +419,8 @@ async function main() {
       nextMaintenanceKm: 97000,
       insuranceExpiresAt: new Date('2026-08-04T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-08-16T00:00:00.000Z'),
-      notes: 'Бульдозер из ведомости ДСМ, применяется на земляных работах и планировке основания.',
+      notes:
+        'Бульдозер из ведомости ДСМ, применяется на земляных работах и планировке основания.',
     },
   });
 
@@ -435,7 +442,8 @@ async function main() {
       nextMaintenanceKm: 75500,
       insuranceExpiresAt: new Date('2026-09-10T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-09-18T00:00:00.000Z'),
-      notes: 'Погрузчик фронтальный из ведомости ДСМ, резерв для подмены на складе щебня.',
+      notes:
+        'Погрузчик фронтальный из ведомости ДСМ, резерв для подмены на складе щебня.',
     },
   });
 
@@ -457,7 +465,8 @@ async function main() {
       nextMaintenanceKm: 69000,
       insuranceExpiresAt: new Date('2026-08-30T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-09-12T00:00:00.000Z'),
-      notes: 'Асфальтоукладчик из ведомости ДСМ, ключевая единица на укладке покрытия.',
+      notes:
+        'Асфальтоукладчик из ведомости ДСМ, ключевая единица на укладке покрытия.',
     },
   });
 
@@ -479,7 +488,8 @@ async function main() {
       nextMaintenanceKm: 73800,
       insuranceExpiresAt: new Date('2026-08-12T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-08-26T00:00:00.000Z'),
-      notes: 'Каток вибрационный дорожный из ведомости ДСМ, используется на уплотнении покрытия.',
+      notes:
+        'Каток вибрационный дорожный из ведомости ДСМ, используется на уплотнении покрытия.',
     },
   });
 
@@ -501,7 +511,8 @@ async function main() {
       nextMaintenanceKm: 62000,
       insuranceExpiresAt: new Date('2026-08-18T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-09-05T00:00:00.000Z'),
-      notes: 'Дорожная фреза для холодного фрезерования покрытия и погрузки фрезерата в самосвалы.',
+      notes:
+        'Дорожная фреза для холодного фрезерования покрытия и погрузки фрезерата в самосвалы.',
     },
   });
 
@@ -523,7 +534,8 @@ async function main() {
       nextMaintenanceKm: 105000,
       insuranceExpiresAt: new Date('2026-07-18T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-08-01T00:00:00.000Z'),
-      notes: 'Автогрейдер категории Е из ведомости ДСМ для профилирования основания.',
+      notes:
+        'Автогрейдер категории Е из ведомости ДСМ для профилирования основания.',
     },
   });
 
@@ -567,7 +579,8 @@ async function main() {
       nextMaintenanceKm: 0,
       insuranceExpiresAt: new Date('2026-09-01T00:00:00.000Z'),
       diagnosticsExpiresAt: new Date('2026-09-15T00:00:00.000Z'),
-      notes: 'Полуприцеп специальный из ведомости, учитывается отдельно от тягача.',
+      notes:
+        'Полуприцеп специальный из ведомости, учитывается отдельно от тягача.',
     },
   });
 
@@ -596,6 +609,7 @@ async function main() {
   const dumpTruckTo2 = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'dump_truck',
+      serviceEventType: 'maintenance',
       category: 'scheduled_service',
       name: 'ТО-2 самосвала: масла, фильтры, тормозная система',
       durationDays: 2,
@@ -607,6 +621,7 @@ async function main() {
   const dumpTruckHydraulics = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'dump_truck',
+      serviceEventType: 'repair',
       category: 'hydraulics',
       name: 'Ревизия гидросистемы подъёма кузова',
       durationDays: 3,
@@ -618,6 +633,7 @@ async function main() {
   const dumpTruckTransmission = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'dump_truck',
+      serviceEventType: 'repair',
       category: 'transmission',
       name: 'Ремонт сцепления и коробки передач самосвала',
       durationDays: 4,
@@ -629,6 +645,7 @@ async function main() {
   const craneHydraulics = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'crane',
+      serviceEventType: 'diagnostics',
       category: 'hydraulics',
       name: 'Проверка гидравлики стрелы и опор автокрана',
       durationDays: 2,
@@ -640,6 +657,7 @@ async function main() {
   const excavatorHydraulics = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'excavator',
+      serviceEventType: 'repair',
       category: 'hydraulics',
       name: 'Ремонт гидроцилиндра стрелы экскаватора',
       durationDays: 5,
@@ -651,6 +669,7 @@ async function main() {
   const excavatorChassis = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'excavator',
+      serviceEventType: 'repair',
       category: 'chassis',
       name: 'Ремонт ходовой части гусеничного экскаватора',
       durationDays: 4,
@@ -662,6 +681,7 @@ async function main() {
   const loaderTransmission = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'loader',
+      serviceEventType: 'diagnostics',
       category: 'transmission',
       name: 'Диагностика трансмиссии фронтального погрузчика',
       durationDays: 2,
@@ -673,6 +693,7 @@ async function main() {
   const paverWorkingEquipment = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'asphalt_paver',
+      serviceEventType: 'repair',
       category: 'working_equipment',
       name: 'Ремонт выглаживающей плиты асфальтоукладчика',
       durationDays: 3,
@@ -684,6 +705,7 @@ async function main() {
   const rollerVibration = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'road_roller',
+      serviceEventType: 'repair',
       category: 'working_equipment',
       name: 'Ремонт вибровозбудителя дорожного катка',
       durationDays: 3,
@@ -695,6 +717,7 @@ async function main() {
   const millingDrum = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'road_milling_machine',
+      serviceEventType: 'diagnostics',
       category: 'working_equipment',
       name: 'Замена резцов и диагностика барабана дорожной фрезы',
       durationDays: 2,
@@ -706,6 +729,7 @@ async function main() {
   const passengerCarBrakes = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'passenger_car',
+      serviceEventType: 'repair',
       category: 'brakes',
       name: 'Замена тормозных колодок и масла',
       durationDays: 2,
@@ -717,6 +741,7 @@ async function main() {
   const vanScheduledService = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'van',
+      serviceEventType: 'maintenance',
       category: 'scheduled_service',
       name: 'Плановое ТО фургона снабжения',
       durationDays: 1,
@@ -728,12 +753,381 @@ async function main() {
   const flatbedChassis = await prisma.fleetRepairTemplate.create({
     data: {
       vehicleType: 'flatbed_truck',
+      serviceEventType: 'repair',
       category: 'chassis',
       name: 'Ремонт подвески и рамы бортового автомобиля',
       durationDays: 3,
       sortOrder: 10,
       notes: 'Выводит технику из подвоза знаков и малой механизации.',
     },
+  });
+
+  await prisma.fleetRepairTemplate.createMany({
+    data: [
+      {
+        id: 'repair-template-crane-scheduled-service',
+        vehicleType: 'crane',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО автокрана: опоры, лебёдка, гидролинии',
+        durationDays: 2,
+        sortOrder: 20,
+        notes:
+          'Проверка узлов, которые влияют на безопасную работу на объекте.',
+      },
+      {
+        id: 'repair-template-crane-load-limiter-diagnostics',
+        vehicleType: 'crane',
+        serviceEventType: 'diagnostics',
+        category: 'diagnostics',
+        name: 'Диагностика ограничителя грузоподъёмности автокрана',
+        durationDays: 1,
+        sortOrder: 30,
+        notes:
+          'Проверяется перед подъёмом дорожных плит, знаков и временных конструкций.',
+      },
+      {
+        id: 'repair-template-excavator-scheduled-service',
+        vehicleType: 'excavator',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО гусеничного экскаватора: масла, фильтры, гидролинии',
+        durationDays: 2,
+        sortOrder: 30,
+        notes:
+          'Плановое обслуживание перед земляными работами и устройством основания.',
+      },
+      {
+        id: 'repair-template-loader-scheduled-service',
+        vehicleType: 'loader',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО фронтального погрузчика',
+        durationDays: 1,
+        sortOrder: 20,
+        notes:
+          'Контроль ковша, мостов и гидравлики перед погрузкой инертных материалов.',
+      },
+      {
+        id: 'repair-template-loader-bucket-hydraulics',
+        vehicleType: 'loader',
+        serviceEventType: 'repair',
+        category: 'hydraulics',
+        name: 'Ремонт гидроцилиндров ковша фронтального погрузчика',
+        durationDays: 3,
+        sortOrder: 30,
+        notes:
+          'Техника недоступна для погрузки щебня и асфальтобетонной смеси.',
+      },
+      {
+        id: 'repair-template-paver-scheduled-service',
+        vehicleType: 'asphalt_paver',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО асфальтоукладчика перед сменой укладки',
+        durationDays: 2,
+        sortOrder: 20,
+        notes: 'Проверка подачи смеси, шнеков, выглаживающей плиты и датчиков.',
+      },
+      {
+        id: 'repair-template-paver-sensors-diagnostics',
+        vehicleType: 'asphalt_paver',
+        serviceEventType: 'diagnostics',
+        category: 'diagnostics',
+        name: 'Диагностика системы подачи смеси и датчиков уклона',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Используется перед этапом укладки асфальтобетонного покрытия.',
+      },
+      {
+        id: 'repair-template-roller-scheduled-service',
+        vehicleType: 'road_roller',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО вибрационного дорожного катка',
+        durationDays: 1,
+        sortOrder: 20,
+        notes: 'Проверка вальцов, вибрационного механизма и гидропривода.',
+      },
+      {
+        id: 'repair-template-roller-hydraulics-diagnostics',
+        vehicleType: 'road_roller',
+        serviceEventType: 'diagnostics',
+        category: 'hydraulics',
+        name: 'Диагностика гидропривода вибрации и рулевого управления',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Нужна перед уплотнением основания и асфальтобетонных слоёв.',
+      },
+      {
+        id: 'repair-template-milling-scheduled-service',
+        vehicleType: 'road_milling_machine',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО дорожной фрезы: привод барабана и конвейер',
+        durationDays: 2,
+        sortOrder: 20,
+        notes: 'Плановое окно перед фрезерованием покрытия на объекте.',
+      },
+      {
+        id: 'repair-template-milling-conveyor-repair',
+        vehicleType: 'road_milling_machine',
+        serviceEventType: 'repair',
+        category: 'working_equipment',
+        name: 'Ремонт конвейера отвода фрезерованного материала',
+        durationDays: 3,
+        sortOrder: 30,
+        notes:
+          'Ремонт влияет на возможность непрерывного фрезерования и вывоза материала.',
+      },
+      {
+        id: 'repair-template-passenger-car-scheduled-service',
+        vehicleType: 'passenger_car',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО легкового автомобиля сопровождения',
+        durationDays: 1,
+        sortOrder: 20,
+        notes: 'Замена расходников и проверка готовности к выезду на объект.',
+      },
+      {
+        id: 'repair-template-passenger-car-chassis-diagnostics',
+        vehicleType: 'passenger_car',
+        serviceEventType: 'diagnostics',
+        category: 'diagnostics',
+        name: 'Диагностика ходовой и рулевого управления легкового автомобиля',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверяется перед регулярными объездами дорожных объектов.',
+      },
+      {
+        id: 'repair-template-van-electrical-diagnostics',
+        vehicleType: 'van',
+        serviceEventType: 'diagnostics',
+        category: 'electrical',
+        name: 'Диагностика электрики и зарядной системы фургона снабжения',
+        durationDays: 1,
+        sortOrder: 20,
+        notes:
+          'Важна для перевозки инструмента, аккумуляторного оборудования и связи.',
+      },
+      {
+        id: 'repair-template-van-brakes-repair',
+        vehicleType: 'van',
+        serviceEventType: 'repair',
+        category: 'brakes',
+        name: 'Ремонт тормозной системы фургона снабжения',
+        durationDays: 2,
+        sortOrder: 30,
+        notes:
+          'Фургон выводится из графика подвоза материалов и малой механизации.',
+      },
+      {
+        id: 'repair-template-flatbed-scheduled-service',
+        vehicleType: 'flatbed_truck',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО бортового автомобиля',
+        durationDays: 1,
+        sortOrder: 20,
+        notes:
+          'Проверка креплений платформы, тормозов и световой сигнализации.',
+      },
+      {
+        id: 'repair-template-flatbed-brakes-diagnostics',
+        vehicleType: 'flatbed_truck',
+        serviceEventType: 'diagnostics',
+        category: 'diagnostics',
+        name: 'Диагностика тормозной системы и световой сигнализации',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проводится перед перевозкой дорожных знаков и ограждений.',
+      },
+      {
+        id: 'repair-template-bulldozer-scheduled-service',
+        vehicleType: 'bulldozer',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО бульдозера: масла, фильтры, натяжение гусениц',
+        durationDays: 2,
+        sortOrder: 10,
+        notes: 'Плановое обслуживание перед земляными работами.',
+      },
+      {
+        id: 'repair-template-bulldozer-blade-repair',
+        vehicleType: 'bulldozer',
+        serviceEventType: 'repair',
+        category: 'working_equipment',
+        name: 'Ремонт отвала и гидроцилиндров подъёма бульдозера',
+        durationDays: 4,
+        sortOrder: 20,
+        notes:
+          'Ремонт блокирует работы по профилированию и перемещению грунта.',
+      },
+      {
+        id: 'repair-template-bulldozer-transmission-diagnostics',
+        vehicleType: 'bulldozer',
+        serviceEventType: 'diagnostics',
+        category: 'transmission',
+        name: 'Диагностика трансмиссии и бортовых редукторов бульдозера',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверка перед длительной работой на участке основания.',
+      },
+      {
+        id: 'repair-template-tractor-scheduled-service',
+        vehicleType: 'tractor',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО трактора дорожной службы',
+        durationDays: 1,
+        sortOrder: 10,
+        notes: 'Проверка навесного оборудования, масел и тормозов.',
+      },
+      {
+        id: 'repair-template-tractor-hydraulics-repair',
+        vehicleType: 'tractor',
+        serviceEventType: 'repair',
+        category: 'hydraulics',
+        name: 'Ремонт навесного оборудования и гидросистемы трактора',
+        durationDays: 3,
+        sortOrder: 20,
+        notes:
+          'Влияет на использование щёток, отвалов и прицепного оборудования.',
+      },
+      {
+        id: 'repair-template-tractor-transmission-diagnostics',
+        vehicleType: 'tractor',
+        serviceEventType: 'diagnostics',
+        category: 'transmission',
+        name: 'Диагностика сцепления и коробки передач трактора',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проводится при рывках и потере тяги на объекте.',
+      },
+      {
+        id: 'repair-template-motor-grader-scheduled-service',
+        vehicleType: 'motor_grader',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО автогрейдера: нож, гидросистема, ходовая часть',
+        durationDays: 2,
+        sortOrder: 10,
+        notes: 'Плановое обслуживание перед профилированием основания.',
+      },
+      {
+        id: 'repair-template-motor-grader-circle-repair',
+        vehicleType: 'motor_grader',
+        serviceEventType: 'repair',
+        category: 'working_equipment',
+        name: 'Ремонт поворотного круга и отвала автогрейдера',
+        durationDays: 4,
+        sortOrder: 20,
+        notes:
+          'Без ремонта техника не назначается на планировку и профилирование.',
+      },
+      {
+        id: 'repair-template-motor-grader-hydraulics-diagnostics',
+        vehicleType: 'motor_grader',
+        serviceEventType: 'diagnostics',
+        category: 'hydraulics',
+        name: 'Диагностика гидравлики управления отвалом автогрейдера',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверка точности управления рабочим органом.',
+      },
+      {
+        id: 'repair-template-truck-tractor-scheduled-service',
+        vehicleType: 'truck_tractor',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО седельного тягача: двигатель, тормоза, седло',
+        durationDays: 2,
+        sortOrder: 10,
+        notes: 'Плановое окно перед перевозкой тяжёлой дорожной техники.',
+      },
+      {
+        id: 'repair-template-truck-tractor-transmission-repair',
+        vehicleType: 'truck_tractor',
+        serviceEventType: 'repair',
+        category: 'transmission',
+        name: 'Ремонт сцепления и коробки передач седельного тягача',
+        durationDays: 4,
+        sortOrder: 20,
+        notes: 'Ремонт влияет на доставку техники и материалов на объекты.',
+      },
+      {
+        id: 'repair-template-truck-tractor-brakes-diagnostics',
+        vehicleType: 'truck_tractor',
+        serviceEventType: 'diagnostics',
+        category: 'brakes',
+        name: 'Диагностика пневмосистемы и тормозов седельного тягача',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверка обязательна перед движением с полуприцепом.',
+      },
+      {
+        id: 'repair-template-semi-trailer-scheduled-service',
+        vehicleType: 'semi_trailer',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'ТО полуприцепа: оси, светотехника, сцепное устройство',
+        durationDays: 1,
+        sortOrder: 10,
+        notes:
+          'Проверка перед перевозкой асфальтоукладчика или дорожной фрезы.',
+      },
+      {
+        id: 'repair-template-semi-trailer-chassis-repair',
+        vehicleType: 'semi_trailer',
+        serviceEventType: 'repair',
+        category: 'chassis',
+        name: 'Ремонт подвески и тормозных камер полуприцепа',
+        durationDays: 3,
+        sortOrder: 20,
+        notes: 'Полуприцеп недоступен для перебазировки тяжёлой техники.',
+      },
+      {
+        id: 'repair-template-semi-trailer-electrical-diagnostics',
+        vehicleType: 'semi_trailer',
+        serviceEventType: 'diagnostics',
+        category: 'electrical',
+        name: 'Диагностика ABS и электрической линии полуприцепа',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверка светотехники и электрической линии перед рейсом.',
+      },
+      {
+        id: 'repair-template-pickup-scheduled-service',
+        vehicleType: 'pickup',
+        serviceEventType: 'maintenance',
+        category: 'scheduled_service',
+        name: 'Плановое ТО пикапа сопровождения',
+        durationDays: 1,
+        sortOrder: 10,
+        notes: 'Проверка перед выездом инженера на дорожный объект.',
+      },
+      {
+        id: 'repair-template-pickup-chassis-repair',
+        vehicleType: 'pickup',
+        serviceEventType: 'repair',
+        category: 'chassis',
+        name: 'Ремонт подвески и шин пикапа сопровождения',
+        durationDays: 2,
+        sortOrder: 20,
+        notes: 'Пикап выводится из поездок на объекты и контрольных объездов.',
+      },
+      {
+        id: 'repair-template-pickup-electrical-diagnostics',
+        vehicleType: 'pickup',
+        serviceEventType: 'diagnostics',
+        category: 'electrical',
+        name: 'Диагностика электрики и средств связи пикапа',
+        durationDays: 1,
+        sortOrder: 30,
+        notes: 'Проверяется питание радиостанции, маяков и зарядных устройств.',
+      },
+    ],
   });
 
   await prisma.fleetServiceEvent.createMany({
@@ -767,7 +1161,7 @@ async function main() {
       {
         vehicleId: mazDump.id,
         repairTemplateId: dumpTruckHydraulics.id,
-        type: 'maintenance',
+        type: 'repair',
         status: 'in_progress',
         title: dumpTruckHydraulics.name,
         startDate: new Date('2026-06-07T00:00:00.000Z'),
@@ -804,7 +1198,7 @@ async function main() {
       {
         vehicleId: mazCrane.id,
         repairTemplateId: craneHydraulics.id,
-        type: 'inspection',
+        type: 'diagnostics',
         status: 'completed',
         title: 'Проверка грузоподъёмного оборудования',
         startDate: new Date('2026-03-30T00:00:00.000Z'),
@@ -841,7 +1235,7 @@ async function main() {
       {
         vehicleId: gazVan.id,
         repairTemplateId: vanScheduledService.id,
-        type: 'inspection',
+        type: 'maintenance',
         status: 'completed',
         title: 'Подготовка в резерв',
         startDate: new Date('2026-03-27T00:00:00.000Z'),
@@ -855,7 +1249,7 @@ async function main() {
       {
         vehicleId: hyundaiTucson.id,
         repairTemplateId: passengerCarBrakes.id,
-        type: 'maintenance',
+        type: 'repair',
         status: 'scheduled',
         title: passengerCarBrakes.name,
         startDate: new Date('2026-06-10T00:00:00.000Z'),
@@ -959,7 +1353,8 @@ async function main() {
       longitude: 27.5462,
       workPeriodStart: new Date('2025-10-15T00:00:00.000Z'),
       workPeriodEnd: new Date('2026-04-24T00:00:00.000Z'),
-      notes: 'Фрезерование старого покрытия завершено, идёт вывоз материала и подготовка основания.',
+      notes:
+        'Фрезерование старого покрытия завершено, идёт вывоз материала и подготовка основания.',
     },
   });
 
@@ -969,7 +1364,7 @@ async function main() {
       workType: 'Укладка асфальтобетонного покрытия',
       address: 'Республика Беларусь, г. Борисов, ул. Центральная',
       latitude: 54.2279,
-      longitude: 28.5050,
+      longitude: 28.505,
       workPeriodStart: new Date('2025-11-03T00:00:00.000Z'),
       workPeriodEnd: new Date('2026-05-18T00:00:00.000Z'),
       notes:
@@ -1080,7 +1475,8 @@ async function main() {
     type: 'traffic_control',
     name: 'Организация движения и ограждение карты',
     durationDays: 1,
-    notes: 'Временные знаки, конусы, схема объезда и допуск техники на карту работ.',
+    notes:
+      'Временные знаки, конусы, схема объезда и допуск техники на карту работ.',
     equipmentRules: [
       {
         vehicleType: 'van',
@@ -1107,7 +1503,8 @@ async function main() {
     type: 'preparation',
     name: 'Очистка основания и подготовка к подгрунтовке',
     durationDays: 1,
-    notes: 'Очистка основания, проверка кромок, подготовка стыков и оборудования.',
+    notes:
+      'Очистка основания, проверка кромок, подготовка стыков и оборудования.',
     equipmentRules: [
       {
         vehicleType: 'loader',
@@ -1144,7 +1541,8 @@ async function main() {
     name: 'Подвоз асфальтобетонной смеси',
     durationDays: 3,
     canOverlap: true,
-    notes: 'Самосвалы должны работать синхронно с производительностью асфальтоукладчика.',
+    notes:
+      'Самосвалы должны работать синхронно с производительностью асфальтоукладчика.',
     equipmentRules: [
       {
         vehicleType: 'dump_truck',
@@ -1154,7 +1552,8 @@ async function main() {
         maxCount: 12,
         plannedHours: 8,
         priority: 'critical',
-        notes: 'Количество зависит от плеча доставки и времени оборота самосвала.',
+        notes:
+          'Количество зависит от плеча доставки и времени оборота самосвала.',
       },
     ],
   });
@@ -1183,7 +1582,8 @@ async function main() {
     name: 'Уплотнение покрытия катками',
     durationDays: 3,
     canOverlap: true,
-    notes: 'Катки идут сразу за асфальтоукладчиком, чтобы сохранить температурный режим.',
+    notes:
+      'Катки идут сразу за асфальтоукладчиком, чтобы сохранить температурный режим.',
     equipmentRules: [
       {
         vehicleType: 'road_roller',
@@ -1201,7 +1601,8 @@ async function main() {
     type: 'quality_control',
     name: 'Контроль ровности, плотности и закрытие смены',
     durationDays: 1,
-    notes: 'Приёмка карты, контроль фактических часов и оформление исполнительных данных.',
+    notes:
+      'Приёмка карты, контроль фактических часов и оформление исполнительных данных.',
     equipmentRules: [
       {
         vehicleType: 'passenger_car',
@@ -1220,7 +1621,8 @@ async function main() {
     name: 'Фрезерование старого покрытия',
     durationDays: 2,
     canOverlap: true,
-    notes: 'Фреза является ведущей машиной, самосвалы должны подойти под конвейер без ожидания.',
+    notes:
+      'Фреза является ведущей машиной, самосвалы должны подойти под конвейер без ожидания.',
     equipmentRules: [
       {
         vehicleType: 'road_milling_machine',
@@ -1240,7 +1642,8 @@ async function main() {
         maxCount: 8,
         plannedHours: 8,
         priority: 'critical',
-        notes: 'Вывоз фрезерата зависит от длины карты и расстояния до площадки складирования.',
+        notes:
+          'Вывоз фрезерата зависит от длины карты и расстояния до площадки складирования.',
       },
     ],
   });
@@ -1249,7 +1652,8 @@ async function main() {
     type: 'preparation',
     name: 'Очистка карты и подготовка основания',
     durationDays: 1,
-    notes: 'Удаление остатков фрезерата, контроль кромок и подготовка к подгрунтовке.',
+    notes:
+      'Удаление остатков фрезерата, контроль кромок и подготовка к подгрунтовке.',
     equipmentRules: [
       {
         vehicleType: 'loader',
@@ -1292,7 +1696,8 @@ async function main() {
     name: 'Подвоз щебня и инертных материалов',
     durationDays: 4,
     canOverlap: true,
-    notes: 'Самосвалы и погрузчик должны обеспечить непрерывную подачу материала на карту.',
+    notes:
+      'Самосвалы и погрузчик должны обеспечить непрерывную подачу материала на карту.',
     equipmentRules: [
       {
         vehicleType: 'dump_truck',
@@ -1363,7 +1768,8 @@ async function main() {
     type: 'earthworks',
     name: 'Разработка и перемещение грунта',
     durationDays: 5,
-    notes: 'Экскаватор и бульдозер формируют фронт, самосвалы вывозят лишний грунт.',
+    notes:
+      'Экскаватор и бульдозер формируют фронт, самосвалы вывозят лишний грунт.',
     equipmentRules: [
       {
         vehicleType: 'excavator',

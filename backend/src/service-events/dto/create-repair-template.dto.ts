@@ -8,11 +8,18 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { FleetRepairCategory, FleetVehicleType } from '@prisma/client';
+import {
+  FleetRepairCategory,
+  FleetServiceEventType,
+  FleetVehicleType,
+} from '@prisma/client';
 
 export class CreateRepairTemplateDto {
   @IsEnum(FleetVehicleType)
   vehicleType: FleetVehicleType;
+
+  @IsEnum(FleetServiceEventType)
+  serviceEventType: FleetServiceEventType;
 
   @IsEnum(FleetRepairCategory)
   category: FleetRepairCategory;

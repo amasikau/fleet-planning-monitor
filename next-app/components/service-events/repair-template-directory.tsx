@@ -34,11 +34,13 @@ import type {
   FleetRepairCategory,
   FleetVehicleType,
   RepairTemplate,
+  ServiceEventType,
 } from "@/lib/types"
 import {
   FLEET_REPAIR_CATEGORY_LABELS,
   FLEET_VEHICLE_TYPE_LABELS,
   FLEET_VEHICLE_TYPES,
+  SERVICE_EVENT_TYPE_LABELS,
 } from "@/lib/types"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -52,6 +54,7 @@ import { toast } from "sonner"
 
 type TemplateForm = {
   vehicleType: FleetVehicleType
+  serviceEventType: ServiceEventType
   category: FleetRepairCategory
   name: string
   durationDays: number
@@ -62,10 +65,25 @@ type TemplateForm = {
 const categories = Object.keys(
   FLEET_REPAIR_CATEGORY_LABELS
 ) as FleetRepairCategory[]
+const serviceEventTypes = Object.keys(
+  SERVICE_EVENT_TYPE_LABELS
+) as ServiceEventType[]
+
+function getTemplateServiceEventType(
+  template: Pick<RepairTemplate, "serviceEventType" | "category">
+): ServiceEventType {
+  if (template.serviceEventType) return template.serviceEventType
+  if (template.category === "diagnostics") return "diagnostics"
+  if (template.category === "scheduled_service") return "maintenance"
+  return "repair"
+}
 
 function initialForm(template?: RepairTemplate | null): TemplateForm {
   return {
     vehicleType: template?.vehicleType ?? "dump_truck",
+    serviceEventType: template
+      ? getTemplateServiceEventType(template)
+      : "maintenance",
     category: template?.category ?? "scheduled_service",
     name: template?.name ?? "",
     durationDays: template?.durationDays ?? 1,
@@ -88,6 +106,7 @@ export function RepairTemplateDirectory({
     useState<FleetVehicleType | null>(null)
   const [categoryFilter, setCategoryFilter] =
     useState<FleetRepairCategory | null>(null)
+  const [typeFilter, setTypeFilter] = useState<ServiceEventType | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<RepairTemplate | null>(
     null
   )
@@ -98,14 +117,17 @@ export function RepairTemplateDirectory({
     const q = search.trim().toLowerCase()
     return templates
       .filter((template) => {
+        const templateType = getTemplateServiceEventType(template)
         if (vehicleTypeFilter && template.vehicleType !== vehicleTypeFilter) {
           return false
         }
+        if (typeFilter && templateType !== typeFilter) return false
         if (categoryFilter && template.category !== categoryFilter) return false
         if (!q) return true
         return (
           template.name.toLowerCase().includes(q) ||
           template.notes.toLowerCase().includes(q) ||
+          SERVICE_EVENT_TYPE_LABELS[templateType].toLowerCase().includes(q) ||
           FLEET_VEHICLE_TYPE_LABELS[template.vehicleType]
             .toLowerCase()
             .includes(q) ||
@@ -117,10 +139,13 @@ export function RepairTemplateDirectory({
       .sort(
         (a, b) =>
           a.vehicleType.localeCompare(b.vehicleType) ||
+          getTemplateServiceEventType(a).localeCompare(
+            getTemplateServiceEventType(b)
+          ) ||
           a.category.localeCompare(b.category) ||
           a.name.localeCompare(b.name, "ru")
       )
-  }, [templates, search, vehicleTypeFilter, categoryFilter])
+  }, [templates, search, vehicleTypeFilter, typeFilter, categoryFilter])
 
   const openCreate = () => {
     setEditingTemplate(null)
@@ -136,7 +161,7 @@ export function RepairTemplateDirectory({
 
   const saveTemplate = async () => {
     if (!form.name.trim()) {
-      toast.error("Укажите название ремонта")
+      toast.error("Укажите название позиции справочника")
       return
     }
     if (form.durationDays < 1) {
@@ -165,7 +190,7 @@ export function RepairTemplateDirectory({
       setEditingTemplate(null)
       onDataChange()
     } catch (err) {
-      toast.error(getErrorMessage(err, "Не удалось сохранить ремонт"))
+      toast.error(getErrorMessage(err, "Не удалось сохранить позицию"))
     }
   }
 
@@ -175,7 +200,7 @@ export function RepairTemplateDirectory({
       toast.success("Позиция справочника отключена")
       onDataChange()
     } catch (err) {
-      toast.error(getErrorMessage(err, "Не удалось отключить ремонт"))
+      toast.error(getErrorMessage(err, "Не удалось отключить позицию"))
     }
   }
 
@@ -189,7 +214,7 @@ export function RepairTemplateDirectory({
               strokeWidth={2}
               className="size-5 text-primary"
             />
-            <CardTitle>Справочник ремонтов</CardTitle>
+            <CardTitle>Справочник ТО и ремонтов</CardTitle>
             <Badge variant="secondary" className="text-xs">
               {templates.length}
             </Badge>
@@ -208,6 +233,26 @@ export function RepairTemplateDirectory({
                 className="h-8 w-40 pl-8 text-sm sm:w-52"
               />
             </div>
+            <Select
+              value={typeFilter ?? "all"}
+              onValueChange={(value) =>
+                setTypeFilter(
+                  value === "all" ? null : (value as ServiceEventType)
+                )
+              }
+            >
+              <SelectTrigger className="h-8 w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все типы заявок</SelectItem>
+                {serviceEventTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {SERVICE_EVENT_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select
               value={vehicleTypeFilter ?? "all"}
               onValueChange={(value) =>
@@ -267,8 +312,9 @@ export function RepairTemplateDirectory({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="pl-6">Тип техники</TableHead>
+                    <TableHead>Тип заявки</TableHead>
                     <TableHead>Раздел</TableHead>
-                    <TableHead>Ремонт</TableHead>
+                    <TableHead>Позиция</TableHead>
                     <TableHead>Дней</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
@@ -277,7 +323,7 @@ export function RepairTemplateDirectory({
                   {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={5}
+                        colSpan={6}
                         className="h-20 text-center text-muted-foreground"
                       >
                         Позиции справочника не найдены
@@ -288,6 +334,15 @@ export function RepairTemplateDirectory({
                       <TableRow key={template.id}>
                         <TableCell className="pl-6 text-sm">
                           {FLEET_VEHICLE_TYPE_LABELS[template.vehicleType]}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {
+                              SERVICE_EVENT_TYPE_LABELS[
+                                getTemplateServiceEventType(template)
+                              ]
+                            }
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-xs">
@@ -351,11 +406,13 @@ export function RepairTemplateDirectory({
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {editingTemplate ? "Редактирование ремонта" : "Новый ремонт"}
+              {editingTemplate
+                ? "Редактирование позиции"
+                : "Новая позиция справочника"}
             </DialogTitle>
             <DialogDescription>
-              Позиция справочника определяет доступные ремонты для выбранного
-              типа техники.
+              Позиция справочника определяет тип заявки, срок и раздел работ для
+              выбранного типа техники.
             </DialogDescription>
           </DialogHeader>
 
@@ -380,6 +437,31 @@ export function RepairTemplateDirectory({
                   {FLEET_VEHICLE_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {FLEET_VEHICLE_TYPE_LABELS[type]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Тип заявки
+              </label>
+              <Select
+                value={form.serviceEventType}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    serviceEventType: value as ServiceEventType,
+                  }))
+                }
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {serviceEventTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {SERVICE_EVENT_TYPE_LABELS[type]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -412,7 +494,7 @@ export function RepairTemplateDirectory({
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Название ремонта
+                Название позиции
               </label>
               <Input
                 value={form.name}

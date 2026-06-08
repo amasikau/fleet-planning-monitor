@@ -199,6 +199,7 @@ export const FLEET_REPAIR_CATEGORY_LABELS: Record<FleetRepairCategory, string> =
 export interface RepairTemplate {
   id: string
   vehicleType: FleetVehicleType
+  serviceEventType?: ServiceEventType
   category: FleetRepairCategory
   name: string
   durationDays: number
