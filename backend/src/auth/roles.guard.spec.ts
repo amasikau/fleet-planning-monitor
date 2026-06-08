@@ -32,7 +32,7 @@ describe('RolesGuard', () => {
   });
 
   it('allows users with a required role', () => {
-    reflector.getAllAndOverride.mockReturnValue(['admin', 'moderator']);
+    reflector.getAllAndOverride.mockReturnValue(['admin', 'user']);
 
     expect(guard.canActivate(createContext('admin'))).toBe(true);
   });
@@ -40,6 +40,6 @@ describe('RolesGuard', () => {
   it('rejects users without a required role', () => {
     reflector.getAllAndOverride.mockReturnValue(['admin']);
 
-    expect(guard.canActivate(createContext('driver'))).toBe(false);
+    expect(guard.canActivate(createContext('user'))).toBe(false);
   });
 });

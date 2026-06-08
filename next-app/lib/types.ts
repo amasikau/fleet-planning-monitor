@@ -1,10 +1,8 @@
-export type UserRole = "admin" | "moderator" | "mechanic" | "driver"
+export type UserRole = "admin" | "user"
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = {
   admin: "Администратор",
-  moderator: "Модератор",
-  mechanic: "Механик",
-  driver: "Водитель",
+  user: "Пользователь",
 }
 
 export type UserStatus = "active" | "blocked"
@@ -56,125 +54,6 @@ export interface AuditLogEntry {
   details: string
 }
 
-/* ── Driver-specific types ── */
-
-export type DrivingCategory = "A" | "B" | "C" | "D" | "E" | "BE" | "CE" | "DE"
-
-export const DRIVING_CATEGORIES: DrivingCategory[] = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "BE",
-  "CE",
-  "DE",
-]
-
-export type DriverDocType = "medical" | "license"
-
-export const DRIVER_DOC_LABELS: Record<DriverDocType, string> = {
-  medical: "Мед. справка",
-  license: "Водительское удостоверение",
-}
-
-export interface DriverDocument {
-  type: DriverDocType
-  fileName: string
-  filePath: string
-  uploadedAt: string
-}
-
-export interface Driver {
-  userId: string
-  username: string
-  lastName: string
-  firstName: string
-  middleName: string
-  position: string
-  categories: DrivingCategory[]
-  documents: DriverDocument[]
-  assignedAt: string
-}
-
-export type DriverAuditAction =
-  | "assign"
-  | "doc_upload"
-  | "doc_remove"
-  | "category_change"
-  | "unassign"
-
-export const DRIVER_AUDIT_LABELS: Record<DriverAuditAction, string> = {
-  assign: "Назначение",
-  doc_upload: "Загрузка документа",
-  doc_remove: "Удаление документа",
-  category_change: "Изменение категорий",
-  unassign: "Снятие назначения",
-}
-
-export interface DriverAuditEntry {
-  id: string
-  timestamp: string
-  action: DriverAuditAction
-  targetUser: string
-  performedBy: string
-  details: string
-}
-
-/* ── Mechanic-specific types ── */
-
-export type MechanicDocType = "certificate" | "medical"
-
-export const MECHANIC_DOC_LABELS: Record<MechanicDocType, string> = {
-  certificate: "Удостоверение механика",
-  medical: "Мед. справка",
-}
-
-export interface MechanicDocument {
-  type: MechanicDocType
-  fileName: string
-  filePath: string
-  uploadedAt: string
-}
-
-export interface Mechanic {
-  userId: string
-  username: string
-  lastName: string
-  firstName: string
-  middleName: string
-  position: string
-  vehicleTypes: FleetVehicleType[]
-  documents: MechanicDocument[]
-  assignedAt: string
-}
-
-export type MechanicAuditAction =
-  | "assign"
-  | "doc_upload"
-  | "doc_remove"
-  | "specialization_change"
-  | "vehicle_type_change"
-  | "unassign"
-
-export const MECHANIC_AUDIT_LABELS: Record<MechanicAuditAction, string> = {
-  assign: "Назначение",
-  doc_upload: "Загрузка документа",
-  doc_remove: "Удаление документа",
-  specialization_change: "Изменение допуска техники",
-  vehicle_type_change: "Изменение допуска техники",
-  unassign: "Снятие назначения",
-}
-
-export interface MechanicAuditEntry {
-  id: string
-  timestamp: string
-  action: MechanicAuditAction
-  targetUser: string
-  performedBy: string
-  details: string
-}
-
 /* ── Fleet-specific types ── */
 
 export type FleetVehicleStatus = "active" | "reserve" | "repair"
@@ -190,16 +69,12 @@ export type FleetAuditAction =
   | "edit"
   | "delete"
   | "status_change"
-  | "assign_driver"
-  | "unassign_driver"
 
 export const FLEET_AUDIT_ACTION_LABELS: Record<FleetAuditAction, string> = {
   create: "Создание",
   edit: "Редактирование",
   delete: "Удаление",
   status_change: "Смена статуса",
-  assign_driver: "Закрепление водителя",
-  unassign_driver: "Открепление водителя",
 }
 
 export type FleetVehicleType =
@@ -258,12 +133,6 @@ export const FLEET_VEHICLE_TYPE_LABELS: Record<FleetVehicleType, string> = {
   pickup: "Пикап",
 }
 
-export interface FleetAssignedDriver {
-  userId: string
-  username: string
-  fullName: string
-}
-
 export interface FleetVehicle {
   id: string
   brand: string
@@ -272,7 +141,6 @@ export interface FleetVehicle {
   type: FleetVehicleType
   status: FleetVehicleStatus
   notes: string
-  assignedDriver: FleetAssignedDriver | null
   createdAt: string
   updatedAt: string
 }
@@ -310,15 +178,10 @@ export type ServiceEventStatus =
   | "completed"
 
 export const SERVICE_EVENT_STATUS_LABELS: Record<ServiceEventStatus, string> = {
-  scheduled: "Ожидает назначения",
+  scheduled: "Запланировано",
   in_progress: "В ремонте",
   overdue: "Просрочено",
   completed: "Завершено",
-}
-
-export interface ServiceEventMechanic {
-  userId: string
-  fullName: string
 }
 
 export interface ServiceEvent {
@@ -331,7 +194,6 @@ export interface ServiceEvent {
   dueAt: string | null
   completedAt: string | null
   mileageKm: number | null
-  mechanic: ServiceEventMechanic | null
   reporter: { userId: string; fullName: string; role: UserRole } | null
   workLogs: {
     id: string
@@ -512,7 +374,6 @@ export interface EquipmentPlanDraftDemand {
   conflictCount: number
   occupiedVehicleIds?: string[]
   availableVehicles?: EquipmentPlanDraftVehicle[]
-  withoutDriverCount: number
   riskLevel: "low" | "medium" | "high"
   risks: string[]
   notes: string
@@ -525,7 +386,6 @@ export interface EquipmentPlanDraftVehicle {
   plateNumber: string
   type: FleetVehicleType
   status: FleetVehicleStatus
-  assignedDriver: { userId: string; fullName: string } | null
 }
 
 export interface EquipmentPlanDraftStage {
@@ -584,7 +444,6 @@ export interface EquipmentPlan {
   vehicleLabel: string
   vehicleType: FleetVehicleType
   vehicleStatus: "active" | "reserve" | "maintenance" | "repair"
-  driver: { userId: string; fullName: string } | null
   workDate: string
   shift: EquipmentPlanShift
   plannedHours: number
@@ -602,7 +461,6 @@ export interface EquipmentPlanStats {
   completed: number
   failed: number
   missingActual: number
-  withoutDriver: number
   deficitDemands: number
   criticalDeficits: number
   averageCoverage: number
@@ -684,7 +542,6 @@ export interface SiteVehicleView {
   brand: string
   model: string
   plateNumber: string
-  driver: { userId: string; fullName: string } | null
   assignedAt: string
 }
 
@@ -697,7 +554,6 @@ export interface AvailableVehicle {
   brand: string
   model: string
   plateNumber: string
-  driver: { userId: string; fullName: string } | null
 }
 
 export type SiteAuditAction =
@@ -724,26 +580,4 @@ export interface SiteAuditEntry {
   siteLabel: string
   performedBy: string
   details: string
-}
-
-/* ── Notifications ── */
-
-export type NotificationCategory = "system" | "security" | "action"
-
-export const NOTIFICATION_CATEGORY_LABELS: Record<
-  NotificationCategory,
-  string
-> = {
-  system: "Системные",
-  security: "Безопасность",
-  action: "Действия",
-}
-
-export interface NotificationItem {
-  id: string
-  category: NotificationCategory
-  title: string
-  description: string
-  createdAt: string
-  read: boolean
 }

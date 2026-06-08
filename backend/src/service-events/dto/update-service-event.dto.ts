@@ -39,10 +39,6 @@ export class UpdateServiceEventDto {
   @IsOptional()
   dueAt?: string;
 
-  @IsString()
-  @IsOptional()
-  mechanicId?: string | null;
-
   @IsDateString()
   @IsOptional()
   completedAt?: string | null;

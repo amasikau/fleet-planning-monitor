@@ -35,7 +35,7 @@ interface AuthenticatedRequest {
 export class SitesController {
   constructor(private readonly sitesService: SitesService) {}
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Get('audit-log')
   async getAuditLog(
     @Query('search') search?: string,
@@ -68,7 +68,7 @@ export class SitesController {
     return this.sitesService.findOne(id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post()
   async create(
     @Body() dto: CreateSiteDto,
@@ -77,7 +77,7 @@ export class SitesController {
     return this.sitesService.create(dto, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -87,7 +87,7 @@ export class SitesController {
     return this.sitesService.update(id, dto, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete(':id')
   async remove(
     @Param('id') id: string,
@@ -96,7 +96,7 @@ export class SitesController {
     return this.sitesService.remove(id, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Patch(':id/complete')
   async complete(
     @Param('id') id: string,
@@ -105,7 +105,7 @@ export class SitesController {
     return this.sitesService.complete(id, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post(':id/vehicles')
   async assignVehicle(
     @Param('id') siteId: string,
@@ -115,7 +115,7 @@ export class SitesController {
     return this.sitesService.assignVehicle(siteId, vehicleId, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete(':id/vehicles/:vehicleId')
   async unassignVehicle(
     @Param('id') siteId: string,

@@ -212,12 +212,6 @@ function vehicleLabel(
   return `${vehicle.brand} ${vehicle.model} · ${vehicle.plateNumber}`
 }
 
-function vehicleDriverName(
-  vehicle: Pick<FleetVehicle, "assignedDriver"> | EquipmentPlanDraftVehicle
-) {
-  return vehicle.assignedDriver?.fullName ?? null
-}
-
 function demandKey(stageSequence: number, vehicleType: FleetVehicleType) {
   return `${stageSequence}:${vehicleType}`
 }
@@ -422,11 +416,7 @@ function buildDefaultSelections(
             (vehicle.status === "active" || vehicle.status === "reserve") &&
             !hasVehicleConflict(vehicle.id, workDates, plans)
         )
-        .sort((a, b) => {
-          if (a.assignedDriver && !b.assignedDriver) return -1
-          if (!a.assignedDriver && b.assignedDriver) return 1
-          return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
-        })
+        .sort((a, b) => vehicleLabel(a).localeCompare(vehicleLabel(b), "ru"))
 
       result[demandKey(stage.sequence, demand.vehicleType)] = candidates
         .slice(0, demand.requiredCount)
@@ -1342,11 +1332,9 @@ function PlanWizardDialog({
                                 planningPlans
                               )
                           )
-                          .sort((a, b) => {
-                            if (a.assignedDriver && !b.assignedDriver) return -1
-                            if (!a.assignedDriver && b.assignedDriver) return 1
-                            return vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
-                          })
+                          .sort((a, b) =>
+                            vehicleLabel(a).localeCompare(vehicleLabel(b), "ru")
+                          )
                       const selected = selectedVehicles[key] ?? []
                       const shortage = Math.max(
                         demand.requiredCount - candidates.length,
@@ -1417,8 +1405,7 @@ function PlanWizardDialog({
                                     {vehicleLabel(vehicle)}
                                   </span>
                                   <span className="block text-xs text-muted-foreground">
-                                    {vehicleDriverName(vehicle) ??
-                                      "Нет закреплённого водителя"}
+                                    {FLEET_VEHICLE_TYPE_LABELS[vehicle.type]}
                                   </span>
                                 </span>
                               </label>

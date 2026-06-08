@@ -5,7 +5,6 @@ import type {
   ServiceEvent,
   ServiceStats,
   FleetVehicle,
-  Mechanic,
 } from "@/lib/types"
 import { api } from "@/lib/api"
 import { ServiceStatsCards } from "@/components/service-events/service-stats"
@@ -18,7 +17,7 @@ import { getErrorMessage } from "@/lib/feedback"
 import { toast } from "sonner"
 
 export default function ServicePage() {
-  const { role, userId, username, canEdit } = useRole()
+  const { canEdit } = useRole()
   const [events, setEvents] = useState<ServiceEvent[]>([])
   const [stats, setStats] = useState<ServiceStats>({
     scheduled: 0,
@@ -27,22 +26,18 @@ export default function ServicePage() {
     completed: 0,
   })
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
-  const [mechanics, setMechanics] = useState<Mechanic[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
-      const [eventsData, statsData, vehiclesData, mechanicsData] =
-        await Promise.all([
-          api.serviceEvents.getAll(),
-          api.serviceEvents.getStats(),
-          api.fleet.getAll(),
-          api.mechanics.getAll(),
-        ])
+      const [eventsData, statsData, vehiclesData] = await Promise.all([
+        api.serviceEvents.getAll(),
+        api.serviceEvents.getStats(),
+        api.fleet.getAll(),
+      ])
       setEvents(eventsData)
       setStats(statsData)
       setVehicles(vehiclesData)
-      setMechanics(mechanicsData)
     } catch (err) {
       toast.error(getErrorMessage(err, "Не удалось загрузить данные"))
     } finally {
@@ -55,7 +50,7 @@ export default function ServicePage() {
   }, [fetchData])
 
   const overdueCount = stats.overdue
-  const canCreateRequest = canEdit || role === "driver"
+  const canCreateRequest = canEdit
 
   if (loading) {
     return (
@@ -73,11 +68,7 @@ export default function ServicePage() {
       <div className="px-4 lg:px-6">
         <h1 className="text-2xl font-bold">ТО и ремонты</h1>
         <p className="text-sm text-muted-foreground">
-          {canEdit
-            ? "Приём заявок, передача ремонта механикам и контроль сроков"
-            : role === "mechanic"
-              ? "Просмотр заявок и ведение закреплённых ремонтов"
-              : "Создание заявок по закреплённому транспорту и контроль статуса ремонта"}
+          Контроль сервисных заявок, сроков обслуживания и влияния ремонтов на план-график
         </p>
       </div>
 
@@ -102,11 +93,7 @@ export default function ServicePage() {
       <ServiceTable
         initialEvents={events}
         vehicles={vehicles}
-        mechanics={mechanics}
         onDataChange={fetchData}
-        currentRole={role}
-        currentUserId={userId}
-        currentUsername={username}
         canCreateRequest={canCreateRequest}
       />
     </div>

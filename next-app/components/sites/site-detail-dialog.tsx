@@ -43,7 +43,6 @@ import {
   CheckmarkBadge01Icon,
   PlusSignCircleIcon,
   Cancel01Icon,
-  UserCircleIcon,
 } from "@hugeicons/core-free-icons"
 import { toast } from "sonner"
 
@@ -410,16 +409,6 @@ export function SiteDetailDialog({
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {v.plateNumber}
-                            {v.driver && (
-                              <span className="ml-2">
-                                <HugeiconsIcon
-                                  icon={UserCircleIcon}
-                                  strokeWidth={1.8}
-                                  className="mr-0.5 inline size-3"
-                                />
-                                {v.driver.fullName}
-                              </span>
-                            )}
                           </p>
                         </div>
                       </div>
@@ -457,7 +446,6 @@ export function SiteDetailDialog({
                         <SelectItem key={v.id} value={v.id}>
                           <span>
                             {v.brand} {v.model} ({v.plateNumber})
-                            {v.driver ? ` · ${v.driver.fullName}` : ""}
                           </span>
                         </SelectItem>
                       ))}

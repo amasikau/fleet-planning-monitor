@@ -45,9 +45,7 @@ interface UserDialogProps {
 
 const roleDotColors: Record<UserRole, string> = {
   admin: "bg-red-500",
-  moderator: "bg-green-500",
-  mechanic: "bg-blue-500",
-  driver: "bg-gray-400",
+  user: "bg-slate-500",
 }
 
 export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps) {
@@ -58,7 +56,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
     lastName: user?.lastName ?? "",
     firstName: user?.firstName ?? "",
     middleName: user?.middleName ?? "",
-    role: (user?.role ?? "driver") as UserRole,
+    role: (user?.role ?? "user") as UserRole,
     position: user?.position ?? "",
     password: "",
   })
@@ -153,7 +151,7 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
             </div>
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Должность</label>
-              <Input value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} placeholder="Водитель категории С" className="h-8 text-sm" />
+              <Input value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} placeholder="Специалист по планированию" className="h-8 text-sm" />
             </div>
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">

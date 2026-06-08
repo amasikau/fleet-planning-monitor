@@ -8,9 +8,7 @@ import { UserGroupIcon, Wifi01Icon, UserBlock01Icon } from "@hugeicons/core-free
 
 const roleColors: Record<UserRole, string> = {
   admin: "bg-red-500",
-  moderator: "bg-green-500",
-  mechanic: "bg-blue-500",
-  driver: "bg-gray-400",
+  user: "bg-slate-500",
 }
 
 interface UsersStatsProps {

@@ -28,7 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type {
   FleetVehicle,
   FleetVehicleStatus,
-  Driver,
 } from "@/lib/types"
 import {
   FLEET_VEHICLE_STATUS_LABELS,
@@ -53,7 +52,6 @@ import {
   ArrowDown01Icon,
   Car01Icon,
   TextFontIcon,
-  UserCircleIcon,
   Activity01Icon,
   Cancel01Icon,
 } from "@hugeicons/core-free-icons"
@@ -75,7 +73,6 @@ type SortKey =
   | "model"
   | "type"
   | "plateNumber"
-  | "assignedDriver"
   | "updatedAt"
 type SortDir = "asc" | "desc"
 
@@ -89,12 +86,11 @@ function formatDate(value: string) {
 
 interface FleetTableProps {
   initialVehicles: FleetVehicle[]
-  drivers: Driver[]
   onDataChange?: () => void
   readonly?: boolean
 }
 
-export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }: FleetTableProps) {
+export function FleetTable({ initialVehicles, onDataChange, readonly }: FleetTableProps) {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>(initialVehicles)
 
   useEffect(() => { setVehicles(initialVehicles) }, [initialVehicles])
@@ -117,17 +113,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
     }
   }
 
-  const sortedDrivers = useMemo(
-    () =>
-      [...drivers].sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(
-          `${b.lastName} ${b.firstName}`,
-          "ru"
-        )
-      ),
-    [drivers]
-  )
-
   const filtered = useMemo(() => {
     let result = vehicles
 
@@ -139,8 +124,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
           v.model.toLowerCase().includes(q) ||
           FLEET_VEHICLE_TYPE_LABELS[v.type].toLowerCase().includes(q) ||
           v.plateNumber.toLowerCase().includes(q) ||
-          (v.assignedDriver?.fullName ?? "").toLowerCase().includes(q) ||
-          (v.assignedDriver?.username ?? "").toLowerCase().includes(q) ||
           v.notes.toLowerCase().includes(q)
       )
     }
@@ -151,10 +134,7 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
 
     result = [...result].sort((a, b) => {
       let av: string, bv: string
-      if (sortKey === "assignedDriver") {
-        av = a.assignedDriver?.fullName ?? ""
-        bv = b.assignedDriver?.fullName ?? ""
-      } else if (sortKey === "type") {
+      if (sortKey === "type") {
         av = FLEET_VEHICLE_TYPE_LABELS[a.type]
         bv = FLEET_VEHICLE_TYPE_LABELS[b.type]
       } else {
@@ -272,13 +252,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
                     {renderSortIcon("plateNumber")}
                   </span>
                 </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("assignedDriver")}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <HugeiconsIcon icon={UserCircleIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" />
-                    Водитель
-                    {renderSortIcon("assignedDriver")}
-                  </span>
-                </TableHead>
                 <TableHead className="select-none">
                   <Popover>
                     <PopoverTrigger asChild>
@@ -325,7 +298,7 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={readonly ? 7 : 8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={readonly ? 6 : 7} className="h-24 text-center text-muted-foreground">
                     Ничего не найдено
                   </TableCell>
                 </TableRow>
@@ -345,16 +318,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
                       <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px]">
                         {vehicle.plateNumber}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {vehicle.assignedDriver ? (
-                        <div>
-                          <p className="font-medium">{vehicle.assignedDriver.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{vehicle.assignedDriver.username}</p>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Не закреплён</span>
-                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={`border-0 ${statusStyles[vehicle.status]}`}>
@@ -400,7 +363,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
             key="add"
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
-            drivers={sortedDrivers}
             onSave={handleSave}
           />
           <FleetVehicleDialog
@@ -408,7 +370,6 @@ export function FleetTable({ initialVehicles, drivers, onDataChange, readonly }:
             open={!!editingVehicle}
             onOpenChange={(o) => !o && setEditingVehicle(null)}
             vehicle={editingVehicle}
-            drivers={sortedDrivers}
             onSave={handleSave}
           />
           <DeleteFleetVehicleDialog

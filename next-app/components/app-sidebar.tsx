@@ -16,7 +16,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { DashboardSquare01Icon, UserGroupIcon, CommandIcon, ContainerTruckIcon, Wrench01Icon, Car01Icon, Building06Icon, Settings02Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
+import { DashboardSquare01Icon, UserGroupIcon, CommandIcon, Car01Icon, Building06Icon, Settings02Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
 import { api } from "@/lib/api"
 import { useRole } from "@/contexts/role-context"
 import { DASHBOARD_COUNTS_REFRESH_EVENT } from "@/lib/dashboard-events"
@@ -27,25 +27,13 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar> & {
   user: { name: string; username: string; avatar: string }
 }) {
-  const [unassignedCount, setUnassignedCount] = useState(0)
-  const [unassignedMechanicsCount, setUnassignedMechanicsCount] = useState(0)
   const [activeServiceCount, setActiveServiceCount] = useState(0)
   const { isAdmin, canEdit } = useRole()
 
   const refreshCounts = useCallback(() => {
     if (!canEdit) return
 
-    void Promise.allSettled([
-      api.drivers.getUnassigned(),
-      api.mechanics.getUnassigned(),
-      api.serviceEvents.getStats(),
-    ]).then(([driversResult, mechanicsResult, serviceResult]) => {
-      if (driversResult.status === "fulfilled") {
-        setUnassignedCount(driversResult.value.length)
-      }
-      if (mechanicsResult.status === "fulfilled") {
-        setUnassignedMechanicsCount(mechanicsResult.value.length)
-      }
+    void Promise.allSettled([api.serviceEvents.getStats()]).then(([serviceResult]) => {
       if (serviceResult.status === "fulfilled") {
         setActiveServiceCount(
           serviceResult.value.inProgress + serviceResult.value.overdue
@@ -116,21 +104,6 @@ export function AppSidebar({
     },
   ]
 
-  const personnel = [
-    {
-      name: "Водители",
-      url: "/dashboard/drivers",
-      icon: <HugeiconsIcon icon={ContainerTruckIcon} strokeWidth={2} />,
-      badge: canEdit ? unassignedCount : undefined,
-    },
-    {
-      name: "Механики",
-      url: "/dashboard/mechanics",
-      icon: <HugeiconsIcon icon={Wrench01Icon} strokeWidth={2} />,
-      badge: canEdit ? unassignedMechanicsCount : undefined,
-    },
-  ]
-
   const admin = [
     {
       name: "Пользователи",
@@ -160,7 +133,6 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />
-        <NavDocuments items={personnel} label="Персонал" />
         {isAdmin && <NavDocuments items={admin} label="Администрирование" />}
       </SidebarContent>
       <SidebarFooter>

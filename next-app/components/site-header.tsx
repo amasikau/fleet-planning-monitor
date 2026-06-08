@@ -7,8 +7,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 const pageTitles: Record<string, string> = {
   "/dashboard": "Обзор",
   "/dashboard/users": "Пользователи",
-  "/dashboard/drivers": "Водители",
-  "/dashboard/mechanics": "Механики",
   "/dashboard/planning": "План-график",
   "/dashboard/planning/work-types": "Виды работ",
   "/dashboard/planning/stages": "Этапы",
@@ -16,7 +14,6 @@ const pageTitles: Record<string, string> = {
   "/dashboard/service": "ТО и ремонты",
   "/dashboard/sites": "Дорожные объекты",
   "/dashboard/profile": "Профиль",
-  "/dashboard/notifications": "Уведомления",
 }
 
 export function SiteHeader() {

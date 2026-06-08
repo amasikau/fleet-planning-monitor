@@ -8,8 +8,6 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // Clear existing data
-  await prisma.notificationRead.deleteMany();
-  await prisma.notification.deleteMany();
   await prisma.equipmentPlanAssignment.deleteMany();
   await prisma.equipmentDemand.deleteMany();
   await prisma.roadWorkStage.deleteMany();
@@ -23,11 +21,8 @@ async function main() {
   await prisma.fleetAuditLog.deleteMany();
   await prisma.fleetServiceEvent.deleteMany();
   await prisma.fleetVehicle.deleteMany();
-  await prisma.driverAuditLog.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.session.deleteMany();
-  await prisma.driverDocument.deleteMany();
-  await prisma.driver.deleteMany();
   await prisma.user.deleteMany();
 
   const hash = await bcrypt.hash('password', 10);
@@ -55,7 +50,7 @@ async function main() {
       lastName: 'Петров',
       firstName: 'Сергей',
       middleName: 'Михайлович',
-      role: 'moderator',
+      role: 'user',
       position: 'Руководитель отдела',
       status: 'active',
       isOnline: true,
@@ -70,8 +65,8 @@ async function main() {
       lastName: 'Сидорова',
       firstName: 'Елена',
       middleName: 'Константиновна',
-      role: 'moderator',
-      position: 'Модератор',
+      role: 'user',
+      position: 'Пользователь',
       status: 'active',
       isOnline: false,
       createdAt: new Date('2024-03-05T00:00:00.000Z'),
@@ -85,8 +80,8 @@ async function main() {
       lastName: 'Козлов',
       firstName: 'Дмитрий',
       middleName: 'Владимирович',
-      role: 'driver',
-      position: 'Водитель категории С',
+      role: 'user',
+      position: 'Специалист дорожной техники',
       status: 'active',
       isOnline: true,
       createdAt: new Date('2024-03-20T00:00:00.000Z'),
@@ -100,8 +95,8 @@ async function main() {
       lastName: 'Морозов',
       firstName: 'Андрей',
       middleName: 'Николаевич',
-      role: 'mechanic',
-      position: 'Старший механик',
+      role: 'user',
+      position: 'Инженер по эксплуатации техники',
       status: 'active',
       isOnline: false,
       createdAt: new Date('2024-04-12T00:00:00.000Z'),
@@ -115,8 +110,8 @@ async function main() {
       lastName: 'Волков',
       firstName: 'Игорь',
       middleName: 'Васильевич',
-      role: 'driver',
-      position: 'Водитель категории В',
+      role: 'user',
+      position: 'Специалист мониторинга техники',
       status: 'active',
       isOnline: false,
       createdAt: new Date('2024-05-01T00:00:00.000Z'),
@@ -130,8 +125,8 @@ async function main() {
       lastName: 'Новикова',
       firstName: 'Мария',
       middleName: 'Алексеевна',
-      role: 'moderator',
-      position: 'Старший модератор',
+      role: 'user',
+      position: 'Старший пользователь',
       status: 'active',
       isOnline: true,
       createdAt: new Date('2024-05-15T00:00:00.000Z'),
@@ -145,8 +140,8 @@ async function main() {
       lastName: 'Лебедев',
       firstName: 'Павел',
       middleName: 'Андреевич',
-      role: 'mechanic',
-      position: 'Механик',
+      role: 'user',
+      position: 'Инженер по технике',
       status: 'blocked',
       isOnline: false,
       createdAt: new Date('2024-06-01T00:00:00.000Z'),
@@ -160,8 +155,8 @@ async function main() {
       lastName: 'Соколов',
       firstName: 'Артём',
       middleName: 'Романович',
-      role: 'driver',
-      position: 'Водитель категории С',
+      role: 'user',
+      position: 'Специалист дорожной техники',
       status: 'active',
       isOnline: false,
       createdAt: new Date('2024-06-20T00:00:00.000Z'),
@@ -175,60 +170,13 @@ async function main() {
       lastName: 'Фёдорова',
       firstName: 'Ольга',
       middleName: 'Игоревна',
-      role: 'moderator',
-      position: 'Модератор по логистике',
+      role: 'user',
+      position: 'Специалист по планированию',
       status: 'active',
       isOnline: true,
       createdAt: new Date('2024-07-10T00:00:00.000Z'),
     },
   });
-
-  // Create drivers (assigned)
-  const driverKozlov = await prisma.driver.create({
-    data: {
-      userId: kozlov.id,
-      categories: ['B', 'C'],
-      assignedAt: new Date('2026-03-16T00:00:00.000Z'),
-      documents: {
-        create: [
-          {
-            type: 'medical',
-            fileName: 'med_kozlov.pdf',
-            uploadedAt: new Date('2026-03-15T00:00:00.000Z'),
-          },
-          {
-            type: 'license',
-            fileName: 'vu_kozlov.pdf',
-            uploadedAt: new Date('2026-03-15T00:00:00.000Z'),
-          },
-        ],
-      },
-    },
-  });
-
-  const driverSokolov = await prisma.driver.create({
-    data: {
-      userId: sokolov.id,
-      categories: ['B', 'C', 'CE'],
-      assignedAt: new Date('2026-03-21T00:00:00.000Z'),
-      documents: {
-        create: [
-          {
-            type: 'medical',
-            fileName: 'med_sokolov.pdf',
-            uploadedAt: new Date('2026-03-20T00:00:00.000Z'),
-          },
-          {
-            type: 'license',
-            fileName: 'vu_sokolov.pdf',
-            uploadedAt: new Date('2026-03-20T00:00:00.000Z'),
-          },
-        ],
-      },
-    },
-  });
-
-  // volkov_iv is UNASSIGNED (no Driver record)
 
   // Seed AuditLog entries
   await prisma.auditLog.createMany({
@@ -292,54 +240,6 @@ async function main() {
     ],
   });
 
-  // Seed DriverAuditLog entries
-  await prisma.driverAuditLog.createMany({
-    data: [
-      {
-        timestamp: new Date('2026-03-21T10:00:00.000Z'),
-        action: 'assign',
-        targetUserId: sokolov.id,
-        performedById: admin.id,
-        details: 'Назначен водителем с категориями: B, C, CE',
-      },
-      {
-        timestamp: new Date('2026-03-20T14:00:00.000Z'),
-        action: 'doc_upload',
-        targetUserId: sokolov.id,
-        performedById: admin.id,
-        details: 'Загружен документ: med_sokolov.pdf (medical)',
-      },
-      {
-        timestamp: new Date('2026-03-20T14:05:00.000Z'),
-        action: 'doc_upload',
-        targetUserId: sokolov.id,
-        performedById: admin.id,
-        details: 'Загружен документ: vu_sokolov.pdf (license)',
-      },
-      {
-        timestamp: new Date('2026-03-16T09:00:00.000Z'),
-        action: 'assign',
-        targetUserId: kozlov.id,
-        performedById: admin.id,
-        details: 'Назначен водителем с категориями: B, C',
-      },
-      {
-        timestamp: new Date('2026-03-15T11:00:00.000Z'),
-        action: 'doc_upload',
-        targetUserId: kozlov.id,
-        performedById: admin.id,
-        details: 'Загружен документ: med_kozlov.pdf (medical)',
-      },
-      {
-        timestamp: new Date('2026-03-15T11:05:00.000Z'),
-        action: 'doc_upload',
-        targetUserId: kozlov.id,
-        performedById: admin.id,
-        details: 'Загружен документ: vu_kozlov.pdf (license)',
-      },
-    ],
-  });
-
   const kamazDump = await prisma.fleetVehicle.create({
     data: {
       name: 'КАМАЗ 65201-53',
@@ -354,7 +254,6 @@ async function main() {
       fuelLevelPercent: 74,
       baseName: 'Минская производственная база',
       currentSite: 'Ремонт трассы М-5, км 34+200 — 42+600',
-      assignedDriverUserId: driverKozlov.userId,
       nextMaintenanceAt: new Date('2026-04-18T08:00:00.000Z'),
       nextMaintenanceKm: 85000,
       insuranceExpiresAt: new Date('2026-05-02T00:00:00.000Z'),
@@ -377,7 +276,6 @@ async function main() {
       fuelLevelPercent: 38,
       baseName: 'Минская производственная база',
       currentSite: 'Асфальтирование ул. Центральная',
-      assignedDriverUserId: driverSokolov.userId,
       nextMaintenanceAt: new Date('2026-04-09T09:00:00.000Z'),
       nextMaintenanceKm: 127000,
       insuranceExpiresAt: new Date('2026-05-21T00:00:00.000Z'),
@@ -703,7 +601,6 @@ async function main() {
         title: 'Плановое ТО-2',
         dueAt: new Date('2026-04-18T08:00:00.000Z'),
         mileageKm: 85000,
-        mechanicId: morozov.id,
         notes: 'Замена масла, фильтров и проверка тормозной системы.',
       },
       {
@@ -714,7 +611,6 @@ async function main() {
         dueAt: new Date('2026-03-28T06:30:00.000Z'),
         completedAt: new Date('2026-03-28T06:45:00.000Z'),
         mileageKm: 82910,
-        mechanicId: morozov.id,
         notes: 'Замечаний не выявлено.',
       },
       {
@@ -724,7 +620,6 @@ async function main() {
         title: 'ТО с ревизией гидролинии',
         dueAt: new Date('2026-04-09T09:00:00.000Z'),
         mileageKm: 127000,
-        mechanicId: morozov.id,
         notes: 'Работы выполняются в ремонтной зоне №2.',
       },
       {
@@ -735,7 +630,6 @@ async function main() {
         dueAt: new Date('2026-03-24T08:00:00.000Z'),
         completedAt: new Date('2026-03-24T09:20:00.000Z'),
         mileageKm: 124980,
-        mechanicId: morozov.id,
         notes: 'Подтверждён износ передней оси, включён в план ТО.',
       },
       {
@@ -753,7 +647,6 @@ async function main() {
         title: 'Проверка грузоподъёмного оборудования',
         dueAt: new Date('2026-03-30T11:00:00.000Z'),
         completedAt: new Date('2026-03-30T12:10:00.000Z'),
-        mechanicId: morozov.id,
         notes: 'Разрешён к работе на объекте без ограничений.',
       },
       {
@@ -763,7 +656,6 @@ async function main() {
         title: 'Ремонт гидроцилиндра стрелы',
         dueAt: new Date('2026-04-05T07:30:00.000Z'),
         mileageKm: 158500,
-        mechanicId: morozov.id,
         notes: 'Требуется поставка ремкомплекта, техника простаивает.',
       },
       {
@@ -782,7 +674,6 @@ async function main() {
         dueAt: new Date('2026-03-27T09:30:00.000Z'),
         completedAt: new Date('2026-03-27T10:00:00.000Z'),
         mileageKm: 19040,
-        mechanicId: morozov.id,
         notes: 'Машина готова к оперативному вводу в работу.',
       },
       {
@@ -792,7 +683,6 @@ async function main() {
         title: 'Замена колодок и масла',
         dueAt: new Date('2026-05-06T08:00:00.000Z'),
         mileageKm: 60000,
-        mechanicId: morozov.id,
         notes: 'Запланировано на окно после завершения выездов по объекту.',
       },
       {
@@ -803,7 +693,6 @@ async function main() {
         dueAt: new Date('2026-04-02T07:00:00.000Z'),
         completedAt: new Date('2026-04-02T07:20:00.000Z'),
         mileageKm: 55980,
-        mechanicId: morozov.id,
         notes: 'Техника в исправном состоянии.',
       },
     ],
@@ -821,11 +710,11 @@ async function main() {
       },
       {
         timestamp: new Date('2026-04-04T18:20:00.000Z'),
-        action: 'assign_driver',
+        action: 'edit',
         targetVehicleId: kamazDump.id,
         vehicleLabel: 'КАМАЗ 65201-53 · 1842 AB-7',
         performedById: admin.id,
-        details: 'Закреплён водитель Козлов Дмитрий Владимирович',
+        details: 'Обновлены эксплуатационные данные техники',
       },
       {
         timestamp: new Date('2026-04-04T18:05:00.000Z'),
@@ -861,11 +750,11 @@ async function main() {
       },
       {
         timestamp: new Date('2026-04-02T09:50:00.000Z'),
-        action: 'assign_driver',
+        action: 'edit',
         targetVehicleId: mazDump.id,
         vehicleLabel: 'МАЗ 6516B9-480-000 · 2213 AK-7',
         performedById: admin.id,
-        details: 'Закреплён водитель Соколов Артём Романович',
+        details: 'Обновлены эксплуатационные данные техники',
       },
       {
         timestamp: new Date('2026-04-02T09:35:00.000Z'),
@@ -1607,107 +1496,6 @@ async function main() {
       },
     ],
   });
-
-  console.log('Seeding notifications...');
-
-  // System notifications (visible to all users)
-  await prisma.notification.createMany({
-    data: [
-      {
-        category: 'system',
-        title: 'Обновление системы',
-        description: 'Версия 2.4.1 успешно установлена',
-        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 мин назад
-      },
-      {
-        category: 'system',
-        title: 'Резервное копирование',
-        description: 'Автоматическое резервное копирование завершено',
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 часа назад
-      },
-      {
-        category: 'system',
-        title: 'Техническое обслуживание',
-        description: 'Плановые работы запланированы на 10 апреля',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // вчера
-      },
-      // Security notifications (visible to all users)
-      {
-        category: 'security',
-        title: 'Новый вход в систему',
-        description: 'Обнаружен вход с нового устройства: Windows • Chrome',
-        createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 час назад
-      },
-      {
-        category: 'security',
-        title: 'Неудачная попытка входа',
-        description: '3 неудачные попытки входа в аккаунт petrov_sm',
-        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 часа назад
-      },
-      {
-        category: 'security',
-        title: 'Смена пароля',
-        description: 'Пароль пользователя sidorova_ek был изменён',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // вчера
-      },
-      {
-        category: 'security',
-        title: 'Блокировка аккаунта',
-        description: 'Аккаунт kozlov_dv заблокирован администратором',
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 дня назад
-      },
-      // Action notifications (visible to admin/moderator only)
-      {
-        category: 'action',
-        title: 'Новый пользователь',
-        description: 'Создан аккаунт для пользователя novikov_av',
-        createdAt: new Date(Date.now() - 45 * 60 * 1000), // 45 мин назад
-      },
-      {
-        category: 'action',
-        title: 'Назначение водителя',
-        description: 'Водитель Кузнецов В.И. назначен на маршрут',
-        createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 часа назад
-      },
-      {
-        category: 'action',
-        title: 'Документы загружены',
-        description: 'Медицинская справка водителя Петров С.М. обновлена',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // вчера
-      },
-      {
-        category: 'action',
-        title: 'Редактирование профиля',
-        description: 'Профиль пользователя admin обновлён',
-        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 дня назад
-      },
-      {
-        category: 'action',
-        title: 'Удаление пользователя',
-        description: 'Аккаунт temporary_user удалён из системы',
-        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 дней назад
-      },
-    ],
-  });
-
-  // Mark some older notifications as read for admin
-  const allNotifications = await prisma.notification.findMany({
-    orderBy: { createdAt: 'desc' },
-  });
-
-  // Mark older notifications (indices 1,2,5,6,8,9,10,11 = read) as read for admin
-  const readIndices = [1, 2, 5, 6, 8, 9, 10, 11];
-  const readData = readIndices
-    .filter((i) => i < allNotifications.length)
-    .map((i) => ({
-      notificationId: allNotifications[i].id,
-      userId: admin.id,
-    }));
-
-  if (readData.length > 0) {
-    await prisma.notificationRead.createMany({ data: readData });
-  }
-
   console.log('Seed completed successfully!');
 }
 

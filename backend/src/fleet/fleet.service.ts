@@ -13,39 +13,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateFleetVehicleDto } from './dto/create-fleet-vehicle.dto';
 import { UpdateFleetVehicleDto } from './dto/update-fleet-vehicle.dto';
 
-const fleetAssignedDriverSelect = {
-  user: {
-    select: {
-      id: true,
-      username: true,
-      lastName: true,
-      firstName: true,
-      middleName: true,
-    },
-  },
-} satisfies Prisma.DriverInclude;
-
-const fleetVehicleInclude = {
-  assignedDriver: {
-    include: fleetAssignedDriverSelect,
-  },
-} satisfies Prisma.FleetVehicleInclude;
-
-type FleetVehicleRecord = Prisma.FleetVehicleGetPayload<{
-  include: typeof fleetVehicleInclude;
-}>;
-
-type FleetDriverRecord = Prisma.DriverGetPayload<{
-  include: typeof fleetAssignedDriverSelect;
-}>;
+type FleetVehicleRecord = Prisma.FleetVehicleGetPayload<Record<string, never>>;
 
 export type FleetVehicleViewStatus = 'active' | 'reserve' | 'repair';
-
-export interface FleetAssignedDriverSummary {
-  userId: string;
-  username: string;
-  fullName: string;
-}
 
 export interface FleetVehicleView {
   id: string;
@@ -55,7 +25,6 @@ export interface FleetVehicleView {
   type: FleetVehicleType;
   status: FleetVehicleViewStatus;
   notes: string;
-  assignedDriver: FleetAssignedDriverSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,26 +50,6 @@ export class FleetService {
     return status === 'maintenance' ? 'repair' : status;
   }
 
-  private formatDriver(
-    driver: FleetDriverRecord | null,
-  ): FleetAssignedDriverSummary | null {
-    if (!driver) {
-      return null;
-    }
-
-    return {
-      userId: driver.userId,
-      username: driver.user.username,
-      fullName: [
-        driver.user.lastName,
-        driver.user.firstName,
-        driver.user.middleName,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    };
-  }
-
   private formatVehicle(vehicle: FleetVehicleRecord): FleetVehicleView {
     return {
       id: vehicle.id,
@@ -110,27 +59,9 @@ export class FleetService {
       type: vehicle.type,
       status: this.mapStatus(vehicle.status),
       notes: vehicle.notes,
-      assignedDriver: this.formatDriver(vehicle.assignedDriver),
       createdAt: vehicle.createdAt.toISOString(),
       updatedAt: vehicle.updatedAt.toISOString(),
     };
-  }
-
-  private async getAssignedDriver(userId?: string | null) {
-    if (!userId) {
-      return null;
-    }
-
-    const driver = await this.prisma.driver.findUnique({
-      where: { userId },
-      include: fleetAssignedDriverSelect,
-    });
-
-    if (!driver) {
-      throw new NotFoundException('Водитель не найден');
-    }
-
-    return driver;
   }
 
   private async createAuditLog(data: {
@@ -157,10 +88,7 @@ export class FleetService {
       | Prisma.FleetVehicleUncheckedCreateInput,
   ) {
     try {
-      return await this.prisma.fleetVehicle.create({
-        data: input,
-        include: fleetVehicleInclude,
-      });
+      return await this.prisma.fleetVehicle.create({ data: input });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -184,7 +112,6 @@ export class FleetService {
       return await this.prisma.fleetVehicle.update({
         where: { id },
         data: input,
-        include: fleetVehicleInclude,
       });
     } catch (error) {
       if (
@@ -201,7 +128,6 @@ export class FleetService {
 
   async findAll(): Promise<FleetVehicleView[]> {
     const vehicles = await this.prisma.fleetVehicle.findMany({
-      include: fleetVehicleInclude,
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
@@ -212,9 +138,6 @@ export class FleetService {
     dto: CreateFleetVehicleDto,
     performedById: string,
   ): Promise<FleetVehicleView> {
-    const assignedDriver = await this.getAssignedDriver(
-      dto.assignedDriverUserId,
-    );
     const vehicleLabel = this.buildVehicleLabel(
       dto.brand,
       dto.model,
@@ -229,7 +152,6 @@ export class FleetService {
       type: dto.type,
       status: dto.status,
       notes: dto.notes ?? '',
-      assignedDriverUserId: assignedDriver?.userId ?? null,
     });
 
     await this.createAuditLog({
@@ -240,16 +162,6 @@ export class FleetService {
       details: `Создана единица техники ${vehicleLabel}`,
     });
 
-    if (assignedDriver) {
-      await this.createAuditLog({
-        action: 'assign_driver',
-        targetVehicleId: vehicle.id,
-        vehicleLabel,
-        performedById,
-        details: `Закреплён водитель ${this.formatDriver(assignedDriver)?.fullName}`,
-      });
-    }
-
     return this.formatVehicle(vehicle);
   }
 
@@ -258,11 +170,9 @@ export class FleetService {
     dto: UpdateFleetVehicleDto,
     performedById: string,
   ): Promise<FleetVehicleView> {
-    const existing: FleetVehicleRecord | null =
-      await this.prisma.fleetVehicle.findUnique({
-        where: { id },
-        include: fleetVehicleInclude,
-      });
+    const existing = await this.prisma.fleetVehicle.findUnique({
+      where: { id },
+    });
 
     if (!existing) {
       throw new NotFoundException('Транспорт не найден');
@@ -273,11 +183,6 @@ export class FleetService {
     const nextPlateNumber = dto.plateNumber ?? existing.plateNumber;
     const nextStatus = dto.status ?? existing.status;
 
-    const driverFieldProvided = 'assignedDriverUserId' in dto;
-    const assignedDriver: FleetDriverRecord | null = driverFieldProvided
-      ? await this.getAssignedDriver(dto.assignedDriverUserId ?? null)
-      : existing.assignedDriver;
-
     const updated = await this.updateVehicle(id, {
       brand: dto.brand,
       model: dto.model,
@@ -286,9 +191,6 @@ export class FleetService {
       type: dto.type,
       status: dto.status,
       notes: dto.notes,
-      assignedDriverUserId: driverFieldProvided
-        ? (assignedDriver?.userId ?? null)
-        : undefined,
     });
 
     const vehicleLabel = this.buildVehicleLabel(
@@ -328,41 +230,6 @@ export class FleetService {
       });
     }
 
-    if (driverFieldProvided) {
-      const previousDriver = this.formatDriver(existing.assignedDriver);
-      const nextDriver = this.formatDriver(assignedDriver);
-
-      if (!previousDriver && nextDriver) {
-        await this.createAuditLog({
-          action: 'assign_driver',
-          targetVehicleId: updated.id,
-          vehicleLabel,
-          performedById,
-          details: `Закреплён водитель ${nextDriver.fullName}`,
-        });
-      } else if (previousDriver && !nextDriver) {
-        await this.createAuditLog({
-          action: 'unassign_driver',
-          targetVehicleId: updated.id,
-          vehicleLabel,
-          performedById,
-          details: `Откреплён водитель ${previousDriver.fullName}`,
-        });
-      } else if (
-        previousDriver &&
-        nextDriver &&
-        previousDriver.userId !== nextDriver.userId
-      ) {
-        await this.createAuditLog({
-          action: 'assign_driver',
-          targetVehicleId: updated.id,
-          vehicleLabel,
-          performedById,
-          details: `Сменён водитель: ${previousDriver.fullName} -> ${nextDriver.fullName}`,
-        });
-      }
-    }
-
     return this.formatVehicle(updated);
   }
 
@@ -372,7 +239,6 @@ export class FleetService {
   ): Promise<{ success: boolean }> {
     const existing = await this.prisma.fleetVehicle.findUnique({
       where: { id },
-      include: fleetVehicleInclude,
     });
 
     if (!existing) {

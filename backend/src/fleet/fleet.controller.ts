@@ -32,7 +32,7 @@ interface AuthenticatedRequest {
 export class FleetController {
   constructor(private readonly fleetService: FleetService) {}
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Get('audit-log')
   async getAuditLog(
     @Query('search') search?: string,
@@ -48,7 +48,7 @@ export class FleetController {
     return this.fleetService.findAll();
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post()
   async create(
     @Body() dto: CreateFleetVehicleDto,
@@ -57,7 +57,7 @@ export class FleetController {
     return this.fleetService.create(dto, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -67,7 +67,7 @@ export class FleetController {
     return this.fleetService.update(id, dto, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete(':id')
   async remove(
     @Param('id') id: string,

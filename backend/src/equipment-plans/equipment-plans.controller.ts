@@ -83,7 +83,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.getStageTemplates();
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('work-types')
   async createWorkType(
     @Body() dto: CreateRoadWorkTypeTemplateDto,
@@ -91,7 +91,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.createWorkType(dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put('work-types/:id')
   async updateWorkType(
     @Param('id') id: string,
@@ -100,13 +100,13 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.updateWorkType(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete('work-types/:id')
   async removeWorkType(@Param('id') id: string): Promise<{ success: boolean }> {
     return this.equipmentPlansService.removeWorkType(id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('work-types/:id/stages')
   async createStageTemplate(
     @Param('id') id: string,
@@ -115,7 +115,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.createStageTemplateForWorkType(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('stage-templates')
   async createGlobalStageTemplate(
     @Body() dto: CreateRoadWorkStageTemplateDto,
@@ -123,7 +123,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.createStageTemplate(dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put('stage-templates/:id')
   async updateStageTemplate(
     @Param('id') id: string,
@@ -132,7 +132,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.updateStageTemplate(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete('stage-templates/:id')
   async removeStageTemplate(
     @Param('id') id: string,
@@ -140,7 +140,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.removeStageTemplate(id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('draft')
   async generateDraft(
     @Body() dto: GenerateEquipmentPlanDraftDto,
@@ -148,7 +148,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.generateDraft(dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('apply-draft')
   async applyDraft(
     @Body() dto: ApplyEquipmentPlanDraftDto,
@@ -174,7 +174,7 @@ export class EquipmentPlansController {
     });
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('stages')
   async createStage(
     @Body() dto: CreateRoadWorkStageDto,
@@ -182,7 +182,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.createStage(dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put('stages/:id')
   async updateStage(
     @Param('id') id: string,
@@ -191,13 +191,13 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.updateStage(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete('stages/:id')
   async removeStage(@Param('id') id: string): Promise<{ success: boolean }> {
     return this.equipmentPlansService.removeStage(id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post('demands')
   async createDemand(
     @Body() dto: CreateEquipmentDemandDto,
@@ -205,7 +205,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.createDemand(dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put('demands/:id')
   async updateDemand(
     @Param('id') id: string,
@@ -214,13 +214,13 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.updateDemand(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete('demands/:id')
   async removeDemand(@Param('id') id: string): Promise<{ success: boolean }> {
     return this.equipmentPlansService.removeDemand(id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Post()
   async create(
     @Body() dto: CreateEquipmentPlanDto,
@@ -229,7 +229,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.create(dto, req.user.id);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -238,7 +238,7 @@ export class EquipmentPlansController {
     return this.equipmentPlansService.update(id, dto);
   }
 
-  @Roles('admin', 'moderator')
+  @Roles('admin', 'user')
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<{ success: boolean }> {
     return this.equipmentPlansService.remove(id);

@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/select"
 import type {
   FleetVehicle,
-  Mechanic,
   ServiceEvent,
   ServiceEventType,
   ServiceEventStatus,
@@ -45,21 +44,17 @@ import {
   Wrench01Icon,
   PencilEdit02Icon,
   Delete02Icon,
-  UserAdd01Icon,
   PlusSignCircleIcon,
   Cancel01Icon,
   Calendar03Icon,
   CheckmarkBadge01Icon,
 } from "@hugeicons/core-free-icons"
 
-const EMPTY_MECHANIC_VALUE = "__none__"
-
 export interface ServiceEventFormValues {
   vehicleId: string
   type: ServiceEventType
   title: string
   dueAt: string
-  mechanicId: string | null
   status?: ServiceEventStatus
   completedAt?: string | null
   mileageKm?: number | null
@@ -82,7 +77,6 @@ function createInitialForm(
     type: event?.type ?? "repair",
     title: event?.title ?? "",
     dueAt: event?.dueAt ? event.dueAt.slice(0, 10) : "",
-    mechanicId: event?.mechanic?.userId ?? null,
     status: event?.status ?? undefined,
     completedAt: event?.completedAt?.slice(0, 10) ?? null,
     mileageKm: event?.mileageKm ?? null,
@@ -103,37 +97,30 @@ export function ServiceEventDialog({
   onOpenChange,
   event,
   vehicles,
-  mechanics,
-  canManage,
-  isDriverRequest = false,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   event?: ServiceEvent | null
   vehicles: FleetVehicle[]
-  mechanics: Mechanic[]
-  canManage: boolean
-  isDriverRequest?: boolean
   onSave: (values: ServiceEventFormValues) => void
 }) {
   const isEdit = !!event
-  const mechanicEdit = isEdit && !canManage
   const [form, setForm] = useState<ServiceEventFormValues>(() =>
     createInitialForm(event, vehicles)
   )
 
   const handleSave = () => {
     if (!form.vehicleId) {
-      toast.error("Выберите транспорт")
+      toast.error("Выберите технику")
       return
     }
     if (!form.title.trim()) {
       toast.error("Укажите краткое описание")
       return
     }
-    if (!mechanicEdit && !form.defectDescription.trim()) {
-      toast.error("Опишите дефект")
+    if (!form.defectDescription.trim()) {
+      toast.error("Опишите дефект или причину обслуживания")
       return
     }
     if (form.workLogs.some((log) => !log.performedAt || !log.title.trim())) {
@@ -142,19 +129,16 @@ export function ServiceEventDialog({
     }
     onSave({
       ...form,
-      type: isDriverRequest ? "repair" : form.type,
       title: form.title.trim(),
       defectDescription: form.defectDescription.trim(),
       notes: form.notes.trim(),
+      workLogs: form.workLogs.map((log) => ({
+        ...log,
+        title: log.title.trim(),
+        description: log.description.trim(),
+      })),
     })
   }
-
-  const sortedMechanics = [...mechanics].sort((a, b) =>
-    `${a.lastName} ${a.firstName}`.localeCompare(
-      `${b.lastName} ${b.firstName}`,
-      "ru"
-    )
-  )
 
   const updateWorkLog = (
     index: number,
@@ -213,38 +197,20 @@ export function ServiceEventDialog({
     })
   }
 
-  const dialogTitle = isEdit
-    ? mechanicEdit
-      ? "Ведение ремонта"
-      : "Редактирование заявки"
-    : isDriverRequest
-      ? "Заявка на ремонт"
-      : "Новая сервисная заявка"
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0 px-6 pt-6 pr-14">
           <DialogTitle className="flex items-center gap-2">
             <HugeiconsIcon
-              icon={
-                isEdit
-                  ? PencilEdit02Icon
-                  : isDriverRequest
-                    ? UserAdd01Icon
-                    : Wrench01Icon
-              }
+              icon={isEdit ? PencilEdit02Icon : Wrench01Icon}
               strokeWidth={2}
               className="size-5 text-primary"
             />
-            {dialogTitle}
+            {isEdit ? "Редактирование заявки" : "Новая сервисная заявка"}
           </DialogTitle>
           <DialogDescription>
-            {mechanicEdit
-              ? "Обновите прогресс, срок и рабочие заметки по закреплённому ремонту"
-              : isDriverRequest
-                ? "Выберите закреплённое Т/С и опишите обнаруженный дефект"
-                : "Создайте заявку, назначьте механика и контрольный срок ремонта"}
+            Укажите технику, тип обслуживания, срок и описание влияния на готовность.
           </DialogDescription>
         </DialogHeader>
 
@@ -256,13 +222,13 @@ export function ServiceEventDialog({
               <div className="rounded-lg border bg-muted/30 p-3 sm:col-span-2">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Транспорт</p>
+                    <p className="text-xs text-muted-foreground">Техника</p>
                     <p className="mt-1 text-sm font-medium">
                       {event.vehicleLabel}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Заявитель</p>
+                    <p className="text-xs text-muted-foreground">Создал</p>
                     <p className="mt-1 text-sm font-medium">
                       {event.reporter?.fullName ?? "Не указан"}
                     </p>
@@ -281,64 +247,55 @@ export function ServiceEventDialog({
 
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Транспорт
+                Техника
               </label>
               <Select
                 value={form.vehicleId}
-                onValueChange={(v) =>
-                  setForm((prev) => ({ ...prev, vehicleId: v }))
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, vehicleId: value }))
                 }
                 disabled={isEdit}
               >
                 <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Выберите машину" />
+                  <SelectValue placeholder="Выберите технику" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.brand} {v.model} · {v.plateNumber}
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.brand} {vehicle.model} · {vehicle.plateNumber}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {isDriverRequest && vehicles.length === 0 && (
-                <p className="mt-1.5 text-xs text-destructive">
-                  За вами не закреплено Т/С для создания заявки.
-                </p>
-              )}
             </div>
 
-            {!isDriverRequest && !mechanicEdit && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Тип
-                </label>
-                <Select
-                  value={form.type}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      type: v as ServiceEventType,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(
-                      Object.keys(
-                        SERVICE_EVENT_TYPE_LABELS
-                      ) as ServiceEventType[]
-                    ).map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {SERVICE_EVENT_TYPE_LABELS[t]}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Тип
+              </label>
+              <Select
+                value={form.type}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    type: value as ServiceEventType,
+                  }))
+                }
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(SERVICE_EVENT_TYPE_LABELS) as ServiceEventType[]).map(
+                    (type) => (
+                      <SelectItem key={type} value={type}>
+                        {SERVICE_EVENT_TYPE_LABELS[type]}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
             {isEdit && (
               <div>
@@ -347,10 +304,10 @@ export function ServiceEventDialog({
                 </label>
                 <Select
                   value={form.status}
-                  onValueChange={(v) =>
+                  onValueChange={(value) =>
                     setForm((prev) => ({
                       ...prev,
-                      status: v as ServiceEventStatus,
+                      status: value as ServiceEventStatus,
                     }))
                   }
                 >
@@ -362,9 +319,9 @@ export function ServiceEventDialog({
                       Object.keys(
                         SERVICE_EVENT_STATUS_LABELS
                       ) as ServiceEventStatus[]
-                    ).map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {SERVICE_EVENT_STATUS_LABELS[s]}
+                    ).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {SERVICE_EVENT_STATUS_LABELS[status]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -372,86 +329,33 @@ export function ServiceEventDialog({
               </div>
             )}
 
-            <div className={isEdit || isDriverRequest ? "sm:col-span-2" : ""}>
+            <div className={isEdit ? "sm:col-span-2" : ""}>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                {mechanicEdit ? "Заявка" : "Краткое описание"}
+                Краткое описание
               </label>
               <Input
                 value={form.title}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, title: e.target.value }))
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, title: event.target.value }))
                 }
-                disabled={mechanicEdit}
-                placeholder="Стук подвески, течь масла..."
+                placeholder="ТО-2, диагностика гидравлики..."
                 className="h-9"
               />
             </div>
 
-            {!mechanicEdit && (
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Описание дефекта
-                </label>
-                <textarea
-                  value={form.defectDescription}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      defectDescription: e.target.value,
-                    }))
-                  }
-                  placeholder="Что произошло, когда проявляется, можно ли продолжать движение"
-                  className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-              </div>
-            )}
-
-            {!isDriverRequest && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Дедлайн ремонта
-                </label>
-                <Input
-                  type="date"
-                  value={form.dueAt}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, dueAt: e.target.value }))
-                  }
-                  className="h-9"
-                />
-              </div>
-            )}
-
-            {canManage && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Механик
-                </label>
-                <Select
-                  value={form.mechanicId ?? EMPTY_MECHANIC_VALUE}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      mechanicId: v === EMPTY_MECHANIC_VALUE ? null : v,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue placeholder="Не назначен" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={EMPTY_MECHANIC_VALUE}>
-                      Не назначать
-                    </SelectItem>
-                    {sortedMechanics.map((m) => (
-                      <SelectItem key={m.userId} value={m.userId}>
-                        {m.lastName} {m.firstName} {m.middleName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div className={isEdit ? "" : "sm:col-span-2"}>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Дедлайн
+              </label>
+              <Input
+                type="date"
+                value={form.dueAt}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, dueAt: event.target.value }))
+                }
+                className="h-9"
+              />
+            </div>
 
             {isEdit && (
               <div>
@@ -461,11 +365,11 @@ export function ServiceEventDialog({
                 <Input
                   type="number"
                   value={form.mileageKm ?? ""}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setForm((prev) => ({
                       ...prev,
-                      mileageKm: e.target.value
-                        ? parseInt(e.target.value)
+                      mileageKm: event.target.value
+                        ? parseInt(event.target.value)
                         : null,
                     }))
                   }
@@ -477,18 +381,31 @@ export function ServiceEventDialog({
 
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                {mechanicEdit ? "Заметки по ремонту" : "Примечание"}
+                Описание
+              </label>
+              <textarea
+                value={form.defectDescription}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    defectDescription: event.target.value,
+                  }))
+                }
+                placeholder="Что обнаружено, как влияет на готовность техники и план работ"
+                className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Примечание
               </label>
               <textarea
                 value={form.notes}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, notes: e.target.value }))
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, notes: event.target.value }))
                 }
-                placeholder={
-                  mechanicEdit
-                    ? "Что сделано, какие запчасти нужны, риски по сроку"
-                    : "Дополнительная информация"
-                }
+                placeholder="Дополнительная информация"
                 className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               />
             </div>
@@ -526,10 +443,7 @@ export function ServiceEventDialog({
                     </div>
                   ) : (
                     form.workLogs.map((log, index) => (
-                      <div
-                        key={index}
-                        className="rounded-lg border bg-card p-3"
-                      >
+                      <div key={index} className="rounded-lg border bg-card p-3">
                         <div className="grid gap-2 sm:grid-cols-[150px_1fr_110px_32px]">
                           <div>
                             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
@@ -544,9 +458,9 @@ export function ServiceEventDialog({
                               <Input
                                 type="date"
                                 value={log.performedAt}
-                                onChange={(e) =>
+                                onChange={(event) =>
                                   updateWorkLog(index, {
-                                    performedAt: e.target.value,
+                                    performedAt: event.target.value,
                                   })
                                 }
                                 className="h-8 pl-8"
@@ -559,10 +473,10 @@ export function ServiceEventDialog({
                             </label>
                             <Input
                               value={log.title}
-                              onChange={(e) =>
-                                updateWorkLog(index, { title: e.target.value })
+                              onChange={(event) =>
+                                updateWorkLog(index, { title: event.target.value })
                               }
-                              placeholder="Замена стойки, диагностика..."
+                              placeholder="Замена масла, диагностика..."
                               className="h-8"
                             />
                           </div>
@@ -573,10 +487,10 @@ export function ServiceEventDialog({
                             <Input
                               type="number"
                               value={log.mileageKm ?? ""}
-                              onChange={(e) =>
+                              onChange={(event) =>
                                 updateWorkLog(index, {
-                                  mileageKm: e.target.value
-                                    ? parseInt(e.target.value)
+                                  mileageKm: event.target.value
+                                    ? parseInt(event.target.value)
                                     : null,
                                 })
                               }
@@ -602,12 +516,12 @@ export function ServiceEventDialog({
                         </div>
                         <textarea
                           value={log.description}
-                          onChange={(e) =>
+                          onChange={(event) =>
                             updateWorkLog(index, {
-                              description: e.target.value,
+                              description: event.target.value,
                             })
                           }
-                          placeholder="Детали работы, использованные материалы, замечания"
+                          placeholder="Детали работы, материалы, замечания"
                           className="mt-2 min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                         />
                       </div>
@@ -617,7 +531,6 @@ export function ServiceEventDialog({
               </div>
             )}
           </div>
-
         </div>
 
         <DialogFooter className="shrink-0 border-t bg-popover px-6 py-4">

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,8 +13,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceEventDto } from './dto/create-service-event.dto';
 import { UpdateServiceEventDto } from './dto/update-service-event.dto';
 
-/* ── View interfaces ── */
-
 export interface ServiceEventView {
   id: string;
   vehicleId: string;
@@ -26,7 +23,6 @@ export interface ServiceEventView {
   dueAt: string | null;
   completedAt: string | null;
   mileageKm: number | null;
-  mechanic: { userId: string; fullName: string } | null;
   reporter: { userId: string; fullName: string; role: UserRole } | null;
   workLogs: {
     id: string;
@@ -57,8 +53,6 @@ export interface ServiceStatsView {
   completed: number;
 }
 
-/* ── Prisma includes ── */
-
 const serviceEventInclude = {
   vehicle: {
     select: {
@@ -66,16 +60,6 @@ const serviceEventInclude = {
       brand: true,
       model: true,
       plateNumber: true,
-      assignedDriverUserId: true,
-    },
-  },
-  mechanic: {
-    select: {
-      id: true,
-      username: true,
-      lastName: true,
-      firstName: true,
-      middleName: true,
     },
   },
   reporter: {
@@ -109,12 +93,6 @@ type ServiceEventRecord = Prisma.FleetServiceEventGetPayload<{
 export class ServiceEventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /* ── Formatters ── */
-
-  private isManager(role: UserRole) {
-    return role === 'admin' || role === 'moderator';
-  }
-
   private getFullName(user: {
     lastName: string;
     firstName: string;
@@ -125,24 +103,17 @@ export class ServiceEventsService {
       .join(' ');
   }
 
-  private getPermissions(event: ServiceEventRecord, actor: AuthUser) {
-    const isManager = this.isManager(actor.role);
-    const isOwnRepair = event.mechanicId === actor.id;
-    const isOwnVehicleRepair = event.vehicle.assignedDriverUserId === actor.id;
-
+  private getPermissions() {
     return {
-      canEdit: isManager || (actor.role === 'mechanic' && isOwnRepair),
-      canDelete: isManager,
-      canAssign: isManager,
-      isOwnRepair,
-      isOwnVehicleRepair,
+      canEdit: true,
+      canDelete: true,
+      canAssign: true,
+      isOwnRepair: false,
+      isOwnVehicleRepair: false,
     };
   }
 
-  private formatEvent(
-    event: ServiceEventRecord,
-    actor: AuthUser,
-  ): ServiceEventView {
+  private formatEvent(event: ServiceEventRecord): ServiceEventView {
     return {
       id: event.id,
       vehicleId: event.vehicle.id,
@@ -153,12 +124,6 @@ export class ServiceEventsService {
       dueAt: event.dueAt?.toISOString() ?? null,
       completedAt: event.completedAt?.toISOString() ?? null,
       mileageKm: event.mileageKm,
-      mechanic: event.mechanic
-        ? {
-            userId: event.mechanic.id,
-            fullName: this.getFullName(event.mechanic),
-          }
-        : null,
       reporter: event.reporter
         ? {
             userId: event.reporter.id,
@@ -179,11 +144,9 @@ export class ServiceEventsService {
       notes: event.notes,
       createdAt: event.createdAt.toISOString(),
       updatedAt: event.updatedAt.toISOString(),
-      permissions: this.getPermissions(event, actor),
+      permissions: this.getPermissions(),
     };
   }
-
-  /* ── Vehicle status recalculation ── */
 
   private async recalcVehicleStatus(vehicleId: string) {
     const activeRepairs = await this.prisma.fleetServiceEvent.count({
@@ -220,17 +183,12 @@ export class ServiceEventsService {
     }
   }
 
-  /* ── CRUD ── */
-
-  async findAll(
-    query: {
-      vehicleId?: string;
-      status?: string;
-      type?: string;
-      search?: string;
-    },
-    actor: AuthUser,
-  ): Promise<ServiceEventView[]> {
+  async findAll(query: {
+    vehicleId?: string;
+    status?: string;
+    type?: string;
+    search?: string;
+  }): Promise<ServiceEventView[]> {
     const where: Prisma.FleetServiceEventWhereInput = {};
 
     if (query.vehicleId) where.vehicleId = query.vehicleId;
@@ -243,18 +201,17 @@ export class ServiceEventsService {
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
     });
 
-    let result = events.map((e) => this.formatEvent(e, actor));
+    let result = events.map((event) => this.formatEvent(event));
 
     if (query.search) {
-      const s = query.search.toLowerCase();
+      const search = query.search.toLowerCase();
       result = result.filter(
-        (e) =>
-          e.title.toLowerCase().includes(s) ||
-          e.vehicleLabel.toLowerCase().includes(s) ||
-          (e.mechanic?.fullName ?? '').toLowerCase().includes(s) ||
-          (e.reporter?.fullName ?? '').toLowerCase().includes(s) ||
-          e.defectDescription.toLowerCase().includes(s) ||
-          e.notes.toLowerCase().includes(s),
+        (event) =>
+          event.title.toLowerCase().includes(search) ||
+          event.vehicleLabel.toLowerCase().includes(search) ||
+          (event.reporter?.fullName ?? '').toLowerCase().includes(search) ||
+          event.defectDescription.toLowerCase().includes(search) ||
+          event.notes.toLowerCase().includes(search),
       );
     }
 
@@ -263,18 +220,10 @@ export class ServiceEventsService {
 
   async getStats(): Promise<ServiceStatsView> {
     const [scheduled, inProgress, overdue, completed] = await Promise.all([
-      this.prisma.fleetServiceEvent.count({
-        where: { status: 'scheduled' },
-      }),
-      this.prisma.fleetServiceEvent.count({
-        where: { status: 'in_progress' },
-      }),
-      this.prisma.fleetServiceEvent.count({
-        where: { status: 'overdue' },
-      }),
-      this.prisma.fleetServiceEvent.count({
-        where: { status: 'completed' },
-      }),
+      this.prisma.fleetServiceEvent.count({ where: { status: 'scheduled' } }),
+      this.prisma.fleetServiceEvent.count({ where: { status: 'in_progress' } }),
+      this.prisma.fleetServiceEvent.count({ where: { status: 'overdue' } }),
+      this.prisma.fleetServiceEvent.count({ where: { status: 'completed' } }),
     ]);
 
     return { scheduled, inProgress, overdue, completed };
@@ -284,55 +233,22 @@ export class ServiceEventsService {
     dto: CreateServiceEventDto,
     actor: AuthUser,
   ): Promise<ServiceEventView> {
-    if (actor.role === 'mechanic') {
-      throw new ForbiddenException(
-        'Механики не могут создавать заявки на ремонт',
-      );
-    }
-
     const vehicle = await this.prisma.fleetVehicle.findUnique({
       where: { id: dto.vehicleId },
     });
-    if (!vehicle) throw new NotFoundException('Транспорт не найден');
+    if (!vehicle) throw new NotFoundException('Техника не найдена');
 
-    const isManager = this.isManager(actor.role);
     if (!dto.title.trim()) {
       throw new BadRequestException('Укажите название заявки');
-    }
-
-    if (!isManager && vehicle.assignedDriverUserId !== actor.id) {
-      throw new ForbiddenException(
-        'Водители могут создавать заявки только по закреплённому транспорту',
-      );
-    }
-
-    if (!isManager && dto.type !== 'repair') {
-      throw new ForbiddenException(
-        'Водители могут создавать только заявки на ремонт',
-      );
-    }
-
-    if (!isManager && (dto.mechanicId || dto.dueAt)) {
-      throw new ForbiddenException(
-        'Назначать механиков и сроки могут только администраторы и модераторы',
-      );
-    }
-    if (!isManager && !dto.defectDescription?.trim()) {
-      throw new BadRequestException('Опишите дефект');
-    }
-
-    if (dto.mechanicId) {
-      await this.assertMechanic(dto.mechanicId);
     }
 
     const event = await this.prisma.fleetServiceEvent.create({
       data: {
         vehicleId: dto.vehicleId,
         type: dto.type,
-        status: dto.mechanicId ? 'in_progress' : 'scheduled',
+        status: 'scheduled',
         title: dto.title.trim(),
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        mechanicId: dto.mechanicId ?? null,
         reportedById: actor.id,
         defectDescription: dto.defectDescription?.trim() ?? '',
         notes: dto.notes?.trim() ?? '',
@@ -340,11 +256,7 @@ export class ServiceEventsService {
       include: serviceEventInclude,
     });
 
-    if (dto.mechanicId) {
-      await this.recalcVehicleStatus(dto.vehicleId);
-    }
-
-    return this.formatEvent(event, actor);
+    return this.formatEvent(event);
   }
 
   async update(
@@ -358,20 +270,6 @@ export class ServiceEventsService {
     });
     if (!existing) throw new NotFoundException('Заявка не найдена');
 
-    const isManager = this.isManager(actor.role);
-    const isAssignedMechanic =
-      actor.role === 'mechanic' && existing.mechanicId === actor.id;
-
-    if (!isManager && !isAssignedMechanic) {
-      throw new ForbiddenException(
-        'Вести ремонт может только назначенный механик',
-      );
-    }
-
-    if (dto.mechanicId !== undefined && dto.mechanicId !== null) {
-      await this.assertMechanic(dto.mechanicId);
-    }
-
     const updateData: Prisma.FleetServiceEventUpdateInput = {};
 
     if (dto.status !== undefined) updateData.status = dto.status;
@@ -380,41 +278,9 @@ export class ServiceEventsService {
     }
     if (dto.notes !== undefined) updateData.notes = dto.notes.trim();
     if (dto.mileageKm !== undefined) updateData.mileageKm = dto.mileageKm;
-
-    if (isManager) {
-      if (dto.title !== undefined) updateData.title = dto.title.trim();
-      if (dto.defectDescription !== undefined) {
-        updateData.defectDescription = dto.defectDescription.trim();
-      }
-
-      if (dto.mechanicId !== undefined) {
-        updateData.mechanic = dto.mechanicId
-          ? { connect: { id: dto.mechanicId } }
-          : { disconnect: true };
-
-        if (dto.mechanicId && existing.status === 'scheduled') {
-          updateData.status = dto.status ?? 'in_progress';
-        } else if (!dto.mechanicId && existing.status !== 'completed') {
-          updateData.status = dto.status ?? 'scheduled';
-        }
-      }
-    } else {
-      const titleChanged =
-        dto.title !== undefined && dto.title.trim() !== existing.title;
-      const defectChanged =
-        dto.defectDescription !== undefined &&
-        dto.defectDescription.trim() !== existing.defectDescription;
-      const mechanicChanged =
-        dto.mechanicId !== undefined &&
-        (dto.mechanicId ?? null) !== (existing.mechanicId ?? null);
-      const managerOnlyFields =
-        titleChanged || defectChanged || mechanicChanged;
-
-      if (managerOnlyFields) {
-        throw new ForbiddenException(
-          'Это поле могут менять только администраторы и модераторы',
-        );
-      }
+    if (dto.title !== undefined) updateData.title = dto.title.trim();
+    if (dto.defectDescription !== undefined) {
+      updateData.defectDescription = dto.defectDescription.trim();
     }
 
     if (dto.workLogs !== undefined) {
@@ -452,47 +318,23 @@ export class ServiceEventsService {
       include: serviceEventInclude,
     });
 
-    // Recalculate vehicle status if status changed
     if (dto.status !== undefined && dto.status !== existing.status) {
       await this.recalcVehicleStatus(existing.vehicleId);
-    } else if (dto.mechanicId !== undefined) {
-      await this.recalcVehicleStatus(existing.vehicleId);
     }
 
-    return this.formatEvent(updated, actor);
+    return this.formatEvent(updated);
   }
 
-  async remove(id: string, actor: AuthUser): Promise<{ success: boolean }> {
-    if (!this.isManager(actor.role)) {
-      throw new ForbiddenException(
-        'Удалять заявки могут только администраторы и модераторы',
-      );
-    }
-
+  async remove(id: string): Promise<{ success: boolean }> {
     const existing = await this.prisma.fleetServiceEvent.findUnique({
       where: { id },
     });
     if (!existing) throw new NotFoundException('Заявка не найдена');
 
     await this.prisma.fleetServiceEvent.delete({ where: { id } });
-
-    // Recalculate vehicle status after removal
     await this.recalcVehicleStatus(existing.vehicleId);
 
     return { success: true };
-  }
-
-  private async assertMechanic(userId: string) {
-    const mechanic = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { mechanic: true },
-    });
-
-    if (!mechanic || mechanic.role !== 'mechanic' || !mechanic.mechanic) {
-      throw new BadRequestException(
-        'Выбранный пользователь не назначен механиком',
-      );
-    }
   }
 }
 

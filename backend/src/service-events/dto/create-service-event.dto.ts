@@ -17,10 +17,6 @@ export class CreateServiceEventDto {
 
   @IsString()
   @IsOptional()
-  mechanicId?: string;
-
-  @IsString()
-  @IsOptional()
   defectDescription?: string;
 
   @IsString()

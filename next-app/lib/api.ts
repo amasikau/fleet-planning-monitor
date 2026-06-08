@@ -1,10 +1,6 @@
 import type {
   User,
   AuditLogEntry,
-  Driver,
-  DriverAuditEntry,
-  Mechanic,
-  MechanicAuditEntry,
   ConstructionSite,
   ConstructionSiteDetail,
   AvailableVehicle,
@@ -13,7 +9,6 @@ import type {
   ServiceEvent,
   ServiceStats,
   SiteAuditEntry,
-  NotificationItem,
   EquipmentPlan,
   EquipmentPlanStats,
   RoadWorkStage,
@@ -116,50 +111,6 @@ export const api = {
     getAuditLog: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : ""
       return fetchApi<AuditLogEntry[]>(`/users/audit-log${qs}`)
-    },
-  },
-  drivers: {
-    getAll: () => fetchApi<Driver[]>("/drivers"),
-    getUnassigned: () => fetchApi<User[]>("/drivers/unassigned"),
-    assign: (data: Record<string, unknown>) =>
-      fetchApi<Driver>("/drivers/assign", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    update: (userId: string, data: Record<string, unknown>) =>
-      fetchApi<Driver>(`/drivers/${userId}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
-    unassign: (userId: string) =>
-      fetchApi<{ success: boolean }>(`/drivers/${userId}/unassign`, {
-        method: "DELETE",
-      }),
-    getAuditLog: (params?: Record<string, string>) => {
-      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
-      return fetchApi<DriverAuditEntry[]>(`/drivers/audit-log${qs}`)
-    },
-  },
-  mechanics: {
-    getAll: () => fetchApi<Mechanic[]>("/mechanics"),
-    getUnassigned: () => fetchApi<User[]>("/mechanics/unassigned"),
-    assign: (data: Record<string, unknown>) =>
-      fetchApi<Mechanic>("/mechanics/assign", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    update: (userId: string, data: Record<string, unknown>) =>
-      fetchApi<Mechanic>(`/mechanics/${userId}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
-    unassign: (userId: string) =>
-      fetchApi<{ success: boolean }>(`/mechanics/${userId}/unassign`, {
-        method: "DELETE",
-      }),
-    getAuditLog: (params?: Record<string, string>) => {
-      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
-      return fetchApi<MechanicAuditEntry[]>(`/mechanics/audit-log${qs}`)
     },
   },
   serviceEvents: {
@@ -363,19 +314,6 @@ export const api = {
       fetchApi<{ success: boolean }>("/profile/change-password", {
         method: "POST",
         body: JSON.stringify({ currentPassword, newPassword }),
-      }),
-  },
-  notifications: {
-    getAll: () => fetchApi<NotificationItem[]>("/notifications"),
-    getUnreadCount: () =>
-      fetchApi<{ unreadCount: number }>("/notifications/unread-count"),
-    markAsRead: (id: string) =>
-      fetchApi<{ success: boolean }>(`/notifications/${id}/read`, {
-        method: "PATCH",
-      }),
-    markAllAsRead: () =>
-      fetchApi<{ success: boolean }>("/notifications/read-all", {
-        method: "PATCH",
       }),
   },
 }

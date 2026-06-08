@@ -2,16 +2,15 @@
 
 import { createContext, useContext, type ReactNode } from "react"
 
-export type UserRole = "admin" | "moderator" | "mechanic" | "driver"
+export type UserRole = "admin" | "user"
 
 interface RoleContextValue {
   userId: string | null
   username: string | null
   role: UserRole | null
   isAdmin: boolean
-  isModerator: boolean
-  canEdit: boolean // admin | moderator
-  canViewAudit: boolean // admin | moderator
+  canEdit: boolean
+  canViewAudit: boolean
 }
 
 const RoleContext = createContext<RoleContextValue>({
@@ -19,7 +18,6 @@ const RoleContext = createContext<RoleContextValue>({
   username: null,
   role: null,
   isAdmin: false,
-  isModerator: false,
   canEdit: false,
   canViewAudit: false,
 })
@@ -38,9 +36,8 @@ export function RoleProvider({
   const role = (initialRole as UserRole) ?? null
 
   const isAdmin = role === "admin"
-  const isModerator = role === "moderator"
-  const canEdit = isAdmin || isModerator
-  const canViewAudit = isAdmin || isModerator
+  const canEdit = role === "admin" || role === "user"
+  const canViewAudit = canEdit
 
   return (
     <RoleContext.Provider
@@ -49,7 +46,6 @@ export function RoleProvider({
         username: username ?? null,
         role,
         isAdmin,
-        isModerator,
         canEdit,
         canViewAudit,
       }}

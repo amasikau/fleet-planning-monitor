@@ -68,18 +68,6 @@ const equipmentPlanInclude = {
       plateNumber: true,
       status: true,
       type: true,
-      assignedDriver: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              lastName: true,
-              firstName: true,
-              middleName: true,
-            },
-          },
-        },
-      },
     },
   },
 } satisfies Prisma.EquipmentPlanAssignmentInclude;
@@ -91,18 +79,6 @@ const draftVehicleSelect = {
   plateNumber: true,
   status: true,
   type: true,
-  assignedDriverUserId: true,
-  assignedDriver: {
-    include: {
-      user: {
-        select: {
-          lastName: true,
-          firstName: true,
-          middleName: true,
-        },
-      },
-    },
-  },
 } satisfies Prisma.FleetVehicleSelect;
 
 const roadWorkStageInclude = {
@@ -173,7 +149,6 @@ export interface EquipmentPlanView {
   vehicleLabel: string;
   vehicleType: FleetVehicleType;
   vehicleStatus: FleetVehicleStatus;
-  driver: { userId: string; fullName: string } | null;
   workDate: string;
   shift: EquipmentPlanShift;
   plannedHours: number;
@@ -191,7 +166,6 @@ export interface EquipmentPlanStatsView {
   completed: number;
   failed: number;
   missingActual: number;
-  withoutDriver: number;
   deficitDemands: number;
   criticalDeficits: number;
   averageCoverage: number;
@@ -296,7 +270,6 @@ export interface EquipmentPlanDraftVehicleView {
   plateNumber: string;
   type: FleetVehicleType;
   status: FleetVehicleStatus;
-  assignedDriver: { userId: string; fullName: string } | null;
 }
 
 export interface EquipmentPlanDraftDemandView {
@@ -311,7 +284,6 @@ export interface EquipmentPlanDraftDemandView {
   conflictCount: number;
   occupiedVehicleIds: string[];
   availableVehicles: EquipmentPlanDraftVehicleView[];
-  withoutDriverCount: number;
   riskLevel: 'low' | 'medium' | 'high';
   risks: string[];
   notes: string;
@@ -400,8 +372,6 @@ export class EquipmentPlansService {
   private formatDraftVehicle(
     vehicle: DraftVehicleRecord,
   ): EquipmentPlanDraftVehicleView {
-    const driver = vehicle.assignedDriver;
-
     return {
       id: vehicle.id,
       brand: vehicle.brand,
@@ -409,18 +379,10 @@ export class EquipmentPlansService {
       plateNumber: vehicle.plateNumber,
       type: vehicle.type,
       status: vehicle.status,
-      assignedDriver: driver
-        ? {
-            userId: driver.userId,
-            fullName: this.getFullName(driver.user),
-          }
-        : null,
     };
   }
 
   private sortDraftVehicles(a: DraftVehicleRecord, b: DraftVehicleRecord) {
-    if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
-    if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
     return `${a.brand} ${a.model} ${a.plateNumber}`.localeCompare(
       `${b.brand} ${b.model} ${b.plateNumber}`,
       'ru',
@@ -663,7 +625,6 @@ export class EquipmentPlansService {
     availableCount: number;
     repairCount: number;
     conflictCount: number;
-    withoutDriverCount: number;
     calculationKind: EquipmentCalculationKind;
   }) {
     const risks: string[] = [];
@@ -687,11 +648,6 @@ export class EquipmentPlansService {
         `${params.conflictCount} ед. уже занято в выбранные даты и смену.`,
       );
     }
-    if (params.withoutDriverCount > 0) {
-      risks.push(
-        `${params.withoutDriverCount} ед. доступной техники без закреплённого водителя.`,
-      );
-    }
     if (params.calculationKind === 'asphalt_delivery') {
       risks.push(
         'Проверьте плечо доставки смеси: простой асфальтоукладчика критичен для качества покрытия.',
@@ -701,7 +657,7 @@ export class EquipmentPlansService {
     const riskLevel: EquipmentPlanDraftDemandView['riskLevel'] =
       operationalAvailable < params.requiredCount
         ? 'high'
-        : params.withoutDriverCount > 0 || params.repairCount > 0
+        : params.repairCount > 0
           ? 'medium'
           : 'low';
 
@@ -745,13 +701,9 @@ export class EquipmentPlansService {
   }
 
   private formatPlan(plan: EquipmentPlanRecord): EquipmentPlanView {
-    const driver = plan.vehicle.assignedDriver;
     const warnings: string[] = [];
     const isPast = plan.workDate < new Date();
 
-    if (!driver) {
-      warnings.push('Техника без закреплённого водителя');
-    }
     if (isPast && plan.status !== 'completed' && plan.actualHours == null) {
       warnings.push('Не заполнены фактические часы после даты работ');
     }
@@ -776,12 +728,6 @@ export class EquipmentPlansService {
       vehicleLabel: `${plan.vehicle.brand} ${plan.vehicle.model} · ${plan.vehicle.plateNumber}`,
       vehicleType: plan.vehicle.type,
       vehicleStatus: plan.vehicle.status,
-      driver: driver
-        ? {
-            userId: driver.userId,
-            fullName: this.getFullName(driver.user),
-          }
-        : null,
       workDate: plan.workDate.toISOString(),
       shift: plan.shift,
       plannedHours: plan.plannedHours,
@@ -1201,12 +1147,6 @@ export class EquipmentPlansService {
               vehicle.type === rule.vehicleType &&
               (vehicle.status === 'maintenance' || vehicle.status === 'repair'),
           ).length;
-          const withoutDriverCount = vehicles.filter(
-            (vehicle) =>
-              vehicle.type === rule.vehicleType &&
-              (vehicle.status === 'active' || vehicle.status === 'reserve') &&
-              !vehicle.assignedDriverUserId,
-          ).length;
           const occupiedVehicleIds = getOccupiedVehicleIds(
             rule.vehicleType,
             stageDateKeys,
@@ -1223,7 +1163,6 @@ export class EquipmentPlansService {
             availableCount,
             repairCount,
             conflictCount,
-            withoutDriverCount,
             calculationKind,
           });
 
@@ -1239,7 +1178,6 @@ export class EquipmentPlansService {
             conflictCount,
             occupiedVehicleIds,
             availableVehicles,
-            withoutDriverCount,
             riskLevel,
             risks,
             notes: rule.notes?.trim() ?? '',
@@ -1336,7 +1274,6 @@ export class EquipmentPlansService {
     const eligibleVehicles = await this.prisma.fleetVehicle.findMany({
       where: { status: { in: ['active', 'reserve'] } },
       orderBy: [
-        { assignedDriverUserId: 'asc' },
         { status: 'asc' },
         { plateNumber: 'asc' },
       ],
@@ -1346,7 +1283,6 @@ export class EquipmentPlansService {
         brand: true,
         model: true,
         plateNumber: true,
-        assignedDriverUserId: true,
       },
     });
 
@@ -1430,8 +1366,6 @@ export class EquipmentPlansService {
               : eligibleVehicles
                   .filter((vehicle) => vehicle.type === demand.vehicleType)
                   .sort((a, b) => {
-                    if (a.assignedDriverUserId && !b.assignedDriverUserId) return -1;
-                    if (!a.assignedDriverUserId && b.assignedDriverUserId) return 1;
                     return a.id.localeCompare(b.id);
                   });
 
@@ -1540,7 +1474,6 @@ export class EquipmentPlansService {
       completed,
       failed,
       missingActual,
-      withoutDriver,
       coverage,
     ] = await Promise.all([
       this.prisma.equipmentPlanAssignment.count({
@@ -1561,9 +1494,6 @@ export class EquipmentPlansService {
           actualHours: null,
           status: { not: 'completed' },
         },
-      }),
-      this.prisma.equipmentPlanAssignment.count({
-        where: { vehicle: { assignedDriverUserId: null } },
       }),
       this.getCoverage({}),
     ]);
@@ -1586,7 +1516,6 @@ export class EquipmentPlansService {
       completed,
       failed,
       missingActual,
-      withoutDriver,
       deficitDemands,
       criticalDeficits,
       averageCoverage,

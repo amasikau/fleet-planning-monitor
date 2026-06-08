@@ -30,8 +30,6 @@ import type {
   ServiceEventStatus,
   ServiceEventType,
   FleetVehicle,
-  Mechanic,
-  UserRole,
 } from "@/lib/types"
 import {
   SERVICE_EVENT_STATUS_LABELS,
@@ -53,7 +51,6 @@ import {
   Car01Icon,
   Wrench01Icon,
   Calendar03Icon,
-  UserCircleIcon,
   Activity01Icon,
   Cancel01Icon,
   MoreHorizontalCircle01Icon,
@@ -61,7 +58,6 @@ import {
   Delete02Icon,
   PlusSignCircleIcon,
   TextFontIcon,
-  AlertCircleIcon,
 } from "@hugeicons/core-free-icons"
 
 const statusBadgeStyles: Record<ServiceEventStatus, string> = {
@@ -84,13 +80,7 @@ const typeBadgeStyles: Record<ServiceEventType, string> = {
     "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 }
 
-type SortKey =
-  | "vehicleLabel"
-  | "title"
-  | "type"
-  | "status"
-  | "dueAt"
-  | "mechanic"
+type SortKey = "vehicleLabel" | "title" | "type" | "status" | "dueAt"
 type SortDir = "asc" | "desc"
 
 function formatDate(value: string | null) {
@@ -102,48 +92,23 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function isManager(role: UserRole | null) {
-  return role === "admin" || role === "moderator"
-}
-
 interface ServiceTableProps {
   initialEvents: ServiceEvent[]
   vehicles: FleetVehicle[]
-  mechanics: Mechanic[]
   onDataChange?: () => void
-  currentRole: UserRole | null
-  currentUserId: string | null
-  currentUsername: string | null
   canCreateRequest: boolean
 }
 
 export function ServiceTable({
   initialEvents,
   vehicles,
-  mechanics,
   onDataChange,
-  currentRole,
-  currentUserId,
-  currentUsername,
   canCreateRequest,
 }: ServiceTableProps) {
   const [events, setEvents] = useState(initialEvents)
   useEffect(() => {
     setEvents(initialEvents)
   }, [initialEvents])
-
-  const canManage = isManager(currentRole)
-  const isDriver = currentRole === "driver"
-  const driverVehicles = useMemo(
-    () =>
-      vehicles.filter(
-        (vehicle) =>
-          vehicle.assignedDriver?.userId === currentUserId ||
-          vehicle.assignedDriver?.username === currentUsername
-      ),
-    [vehicles, currentUserId, currentUsername]
-  )
-  const createVehicles = isDriver ? driverVehicles : vehicles
 
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ServiceEvent | null>(null)
@@ -174,7 +139,6 @@ export function ServiceTable({
         (event) =>
           event.title.toLowerCase().includes(q) ||
           event.vehicleLabel.toLowerCase().includes(q) ||
-          (event.mechanic?.fullName ?? "").toLowerCase().includes(q) ||
           (event.reporter?.fullName ?? "").toLowerCase().includes(q) ||
           event.defectDescription.toLowerCase().includes(q) ||
           event.notes.toLowerCase().includes(q)
@@ -186,12 +150,7 @@ export function ServiceTable({
 
     result = [...result].sort((a, b) => {
       let cmp: number
-      if (sortKey === "mechanic") {
-        cmp = (a.mechanic?.fullName ?? "").localeCompare(
-          b.mechanic?.fullName ?? "",
-          "ru"
-        )
-      } else if (sortKey === "dueAt") {
+      if (sortKey === "dueAt") {
         const aTime = a.dueAt
           ? new Date(a.dueAt).getTime()
           : Number.MAX_SAFE_INTEGER
@@ -221,13 +180,6 @@ export function ServiceTable({
     return result
   }, [events, search, statusFilter, typeFilter, sortKey, sortDir])
 
-  const ownRepairCount = events.filter(
-    (event) => event.permissions.isOwnRepair
-  ).length
-  const ownVehicleRepairCount = events.filter(
-    (event) => event.permissions.isOwnVehicleRepair
-  ).length
-
   const renderSortIcon = (col: SortKey) => {
     if (sortKey !== col) return null
     return (
@@ -239,42 +191,18 @@ export function ServiceTable({
     )
   }
 
-  const buildPayload = (values: ServiceEventFormValues) => {
-    if (editingEvent && !canManage) {
-      return {
-        status: values.status,
-        dueAt: values.dueAt || undefined,
-        completedAt: values.completedAt,
-        mileageKm: values.mileageKm,
-        notes: values.notes,
-        workLogs: values.workLogs,
-      }
-    }
-
-    if (!editingEvent && isDriver) {
-      return {
-        vehicleId: values.vehicleId,
-        type: "repair",
-        title: values.title,
-        defectDescription: values.defectDescription,
-        notes: values.notes,
-      }
-    }
-
-    return {
-      vehicleId: values.vehicleId,
-      type: values.type,
-      title: values.title,
-      dueAt: values.dueAt || undefined,
-      mechanicId: values.mechanicId,
-      status: values.status,
-      completedAt: values.completedAt,
-      mileageKm: values.mileageKm,
-      defectDescription: values.defectDescription,
-      notes: values.notes,
-      workLogs: editingEvent ? values.workLogs : undefined,
-    }
-  }
+  const buildPayload = (values: ServiceEventFormValues) => ({
+    vehicleId: values.vehicleId,
+    type: values.type,
+    title: values.title,
+    dueAt: values.dueAt || undefined,
+    status: values.status,
+    completedAt: values.completedAt,
+    mileageKm: values.mileageKm,
+    defectDescription: values.defectDescription,
+    notes: values.notes,
+    workLogs: editingEvent ? values.workLogs : undefined,
+  })
 
   const handleSave = async (values: ServiceEventFormValues) => {
     try {
@@ -284,7 +212,7 @@ export function ServiceTable({
         toast.success("Заявка обновлена")
       } else {
         await api.serviceEvents.create(payload)
-        toast.success(isDriver ? "Заявка на ремонт отправлена" : "Заявка создана")
+        toast.success("Заявка создана")
       }
       setShowAddDialog(false)
       setEditingEvent(null)
@@ -316,25 +244,19 @@ export function ServiceTable({
           </p>
         </div>
         <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">
-            {currentRole === "mechanic" ? "Мои ремонты" : "Назначено механикам"}
-          </p>
+          <p className="text-xs text-muted-foreground">В работе</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">
-            {currentRole === "mechanic"
-              ? ownRepairCount
-              : events.filter((event) => !!event.mechanic).length}
+            {events.filter((event) => event.status === "in_progress").length}
           </p>
         </div>
         <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">
-            {isDriver ? "Ремонты моего Т/С" : "Без дедлайна"}
-          </p>
+          <p className="text-xs text-muted-foreground">Без дедлайна</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">
-            {isDriver
-              ? ownVehicleRepairCount
-              : events.filter(
-                  (event) => event.status !== "completed" && !event.dueAt
-                ).length}
+            {
+              events.filter(
+                (event) => event.status !== "completed" && !event.dueAt
+              ).length
+            }
           </p>
         </div>
       </div>
@@ -380,7 +302,7 @@ export function ServiceTable({
                   strokeWidth={2}
                   className="mr-1.5 size-4"
                 />
-                {isDriver ? "Заявка" : "Создать"}
+                Создать
               </Button>
             )}
           </div>
@@ -388,7 +310,7 @@ export function ServiceTable({
 
         <CardContent className="p-0">
           <div className="overflow-auto">
-            <div className="min-w-[1040px]">
+            <div className="min-w-[920px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -402,7 +324,7 @@ export function ServiceTable({
                           strokeWidth={2}
                           className="size-3.5 text-muted-foreground"
                         />
-                        Транспорт{renderSortIcon("vehicleLabel")}
+                        Техника{renderSortIcon("vehicleLabel")}
                       </span>
                     </TableHead>
                     <TableHead
@@ -522,19 +444,6 @@ export function ServiceTable({
                     </TableHead>
                     <TableHead
                       className="cursor-pointer select-none"
-                      onClick={() => toggleSort("mechanic")}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <HugeiconsIcon
-                          icon={UserCircleIcon}
-                          strokeWidth={2}
-                          className="size-3.5 text-muted-foreground"
-                        />
-                        Ответственный{renderSortIcon("mechanic")}
-                      </span>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none"
                       onClick={() => toggleSort("dueAt")}
                     >
                       <span className="inline-flex items-center gap-1.5">
@@ -553,7 +462,7 @@ export function ServiceTable({
                   {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={6}
                         className="h-24 text-center text-muted-foreground"
                       >
                         Ничего не найдено
@@ -566,24 +475,14 @@ export function ServiceTable({
                           <div className="font-medium">
                             {event.vehicleLabel}
                           </div>
-                          <div className="mt-1 flex gap-1.5">
-                            {event.permissions.isOwnVehicleRepair && (
-                              <Badge
-                                variant="outline"
-                                className="border-emerald-200 text-[10px] text-emerald-700"
-                              >
-                                Мой Т/С
-                              </Badge>
-                            )}
-                            {event.reporter && (
-                              <span className="text-xs text-muted-foreground">
-                                Заявил: {event.reporter.fullName}
-                              </span>
-                            )}
-                          </div>
+                          {event.reporter && (
+                            <span className="text-xs text-muted-foreground">
+                              Создал: {event.reporter.fullName}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
-                          <div className="max-w-[280px]">
+                          <div className="max-w-[300px]">
                             <p className="font-medium">{event.title}</p>
                             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                               {event.defectDescription ||
@@ -616,82 +515,47 @@ export function ServiceTable({
                             {SERVICE_EVENT_STATUS_LABELS[event.status]}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {event.mechanic ? (
-                            <div className="flex flex-col gap-1">
-                              <span>{event.mechanic.fullName}</span>
-                              {event.permissions.isOwnRepair && (
-                                <Badge
-                                  variant="outline"
-                                  className="w-fit border-blue-200 text-[10px] text-blue-700"
-                                >
-                                  Мой ремонт
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-amber-700">
-                              <HugeiconsIcon
-                                icon={AlertCircleIcon}
-                                strokeWidth={2}
-                                className="size-3.5"
-                              />
-                              Не назначен
-                            </span>
-                          )}
-                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground tabular-nums">
                           {formatDate(event.dueAt)}
                         </TableCell>
                         <TableCell>
-                          {(event.permissions.canEdit ||
-                            event.permissions.canDelete) && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                >
-                                  <HugeiconsIcon
-                                    icon={MoreHorizontalCircle01Icon}
-                                    strokeWidth={2}
-                                    className="size-4"
-                                  />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                {event.permissions.canEdit && (
-                                  <DropdownMenuItem
-                                    onClick={() => setEditingEvent(event)}
-                                  >
-                                    <HugeiconsIcon
-                                      icon={PencilEdit02Icon}
-                                      strokeWidth={2}
-                                    />
-                                    {canManage
-                                      ? "Редактировать"
-                                      : "Вести ремонт"}
-                                  </DropdownMenuItem>
-                                )}
-                                {event.permissions.canDelete && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      variant="destructive"
-                                      onClick={() => setDeletingEvent(event)}
-                                    >
-                                      <HugeiconsIcon
-                                        icon={Delete02Icon}
-                                        strokeWidth={2}
-                                      />
-                                      Удалить
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                              >
+                                <HugeiconsIcon
+                                  icon={MoreHorizontalCircle01Icon}
+                                  strokeWidth={2}
+                                  className="size-4"
+                                />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                onClick={() => setEditingEvent(event)}
+                              >
+                                <HugeiconsIcon
+                                  icon={PencilEdit02Icon}
+                                  strokeWidth={2}
+                                />
+                                Редактировать
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setDeletingEvent(event)}
+                              >
+                                <HugeiconsIcon
+                                  icon={Delete02Icon}
+                                  strokeWidth={2}
+                                />
+                                Удалить
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))
@@ -708,10 +572,7 @@ export function ServiceTable({
           key="add"
           open={showAddDialog}
           onOpenChange={setShowAddDialog}
-          vehicles={createVehicles}
-          mechanics={mechanics}
-          canManage={canManage}
-          isDriverRequest={isDriver}
+          vehicles={vehicles}
           onSave={handleSave}
         />
       )}
@@ -722,19 +583,15 @@ export function ServiceTable({
           onOpenChange={(open) => !open && setEditingEvent(null)}
           event={editingEvent}
           vehicles={vehicles}
-          mechanics={mechanics}
-          canManage={canManage}
           onSave={handleSave}
         />
       )}
-      {canManage && (
-        <DeleteServiceEventDialog
-          open={!!deletingEvent}
-          onOpenChange={(open) => !open && setDeletingEvent(null)}
-          event={deletingEvent}
-          onConfirm={handleDelete}
-        />
-      )}
+      <DeleteServiceEventDialog
+        open={!!deletingEvent}
+        onOpenChange={(open) => !open && setDeletingEvent(null)}
+        event={deletingEvent}
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

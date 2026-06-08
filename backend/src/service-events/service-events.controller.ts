@@ -38,7 +38,7 @@ export class ServiceEventsController {
     @Query('type') type?: string,
     @Query('search') search?: string,
   ) {
-    return this.service.findAll({ vehicleId, status, type, search }, req.user);
+    return this.service.findAll({ vehicleId, status, type, search });
   }
 
   @Post()
@@ -59,7 +59,7 @@ export class ServiceEventsController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
-    return this.service.remove(id, req.user);
+  async remove(@Param('id') id: string) {
+    return this.service.remove(id);
   }
 }

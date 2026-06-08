@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import type {
-  Driver,
   FleetVehicle,
   FleetVehicleStatus,
   FleetVehicleType,
@@ -43,12 +42,9 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { toast } from "sonner"
 import {
   Car01Icon,
-  ContainerTruckIcon,
   Delete02Icon,
   PencilEdit02Icon,
 } from "@hugeicons/core-free-icons"
-
-const EMPTY_DRIVER_VALUE = "__none__"
 
 export interface FleetVehicleFormValues {
   brand: string
@@ -56,12 +52,7 @@ export interface FleetVehicleFormValues {
   plateNumber: string
   type: FleetVehicleType
   status: FleetVehicleStatus
-  assignedDriverUserId: string | null
   notes: string
-}
-
-function getDriverLabel(driver: Driver) {
-  return `${driver.lastName} ${driver.firstName} ${driver.middleName}`.trim()
 }
 
 function createInitialForm(
@@ -73,7 +64,6 @@ function createInitialForm(
     plateNumber: vehicle?.plateNumber ?? "",
     type: vehicle?.type ?? "dump_truck",
     status: vehicle?.status ?? "reserve",
-    assignedDriverUserId: vehicle?.assignedDriver?.userId ?? null,
     notes: vehicle?.notes ?? "",
   }
 }
@@ -82,13 +72,11 @@ export function FleetVehicleDialog({
   open,
   onOpenChange,
   vehicle,
-  drivers,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   vehicle?: FleetVehicle | null
-  drivers: Driver[]
   onSave: (values: FleetVehicleFormValues) => void
 }) {
   const isEdit = !!vehicle
@@ -244,44 +232,6 @@ export function FleetVehicleDialog({
                         {FLEET_VEHICLE_STATUS_LABELS[status]}
                       </SelectItem>
                     ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Закреплённый водитель
-            </label>
-            <Select
-              value={form.assignedDriverUserId ?? EMPTY_DRIVER_VALUE}
-              onValueChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  assignedDriverUserId:
-                    value === EMPTY_DRIVER_VALUE ? null : value,
-                }))
-              }
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Без закрепления" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value={EMPTY_DRIVER_VALUE}>
-                    Не закреплять
-                  </SelectItem>
-                  {drivers.map((driver) => (
-                    <SelectItem key={driver.userId} value={driver.userId}>
-                      <span className="flex items-center gap-2">
-                        <HugeiconsIcon
-                          icon={ContainerTruckIcon}
-                          strokeWidth={1.8}
-                          className="size-4 text-muted-foreground"
-                        />
-                        <span>{getDriverLabel(driver)}</span>
-                      </span>
-                    </SelectItem>
-                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>

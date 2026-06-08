@@ -67,7 +67,6 @@ export default function DashboardPage() {
     completed: 0,
     failed: 0,
     missingActual: 0,
-    withoutDriver: 0,
     deficitDemands: 0,
     criticalDeficits: 0,
     averageCoverage: 100,
@@ -122,9 +121,6 @@ export default function DashboardPage() {
   const activeVehicles = vehicles.filter((vehicle) => vehicle.status === "active")
   const reserveVehicles = vehicles.filter((vehicle) => vehicle.status === "reserve")
   const repairVehicles = vehicles.filter((vehicle) => vehicle.status === "repair")
-  const vehiclesWithoutDriver = vehicles.filter(
-    (vehicle) => vehicle.status === "active" && !vehicle.assignedDriver
-  )
   const sitesWithEquipment = sites.filter((site) => site.vehicleCount > 0)
   const criticalCoverageItems = coverage.filter(
     (item) => item.deficit > 0 && item.priority === "critical"
@@ -134,7 +130,7 @@ export default function DashboardPage() {
     {
       label: "Техника в работе",
       value: activeVehicles.length,
-      note: `${vehiclesWithoutDriver.length} без водителя`,
+      note: `${planStats.deficitDemands} дефицитов в планах`,
       icon: CheckmarkBadge01Icon,
       className: "text-emerald-600 bg-emerald-500/10",
     },
@@ -282,10 +278,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm">Активная техника без водителя</span>
-              <Badge variant="secondary">{vehiclesWithoutDriver.length}</Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
               <span className="text-sm">Просроченные сервисные заявки</span>
               <Badge variant="secondary">{serviceStats.overdue}</Badge>
             </div>
@@ -296,10 +288,6 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between rounded-lg border p-3">
               <span className="text-sm">Срывы смен</span>
               <Badge variant="secondary">{planStats.failed}</Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm">Плановые записи без водителя</span>
-              <Badge variant="secondary">{planStats.withoutDriver}</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <span className="text-sm">Дефицит потребностей объектов</span>
