@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/select"
 import type {
   FleetVehicle,
+  RepairTemplate,
   ServiceEvent,
   ServiceEventType,
   ServiceEventStatus,
 } from "@/lib/types"
 import {
+  FLEET_REPAIR_CATEGORY_LABELS,
   SERVICE_EVENT_TYPE_LABELS,
   SERVICE_EVENT_STATUS_LABELS,
 } from "@/lib/types"
@@ -52,8 +54,11 @@ import {
 
 export interface ServiceEventFormValues {
   vehicleId: string
+  repairTemplateId: string
   type: ServiceEventType
   title: string
+  startDate: string
+  durationDays: number
   dueAt: string
   status?: ServiceEventStatus
   completedAt?: string | null
@@ -70,13 +75,25 @@ export interface ServiceEventFormValues {
 
 function createInitialForm(
   event?: ServiceEvent | null,
-  vehicles?: FleetVehicle[]
+  vehicles?: FleetVehicle[],
+  repairTemplates?: RepairTemplate[]
 ): ServiceEventFormValues {
+  const vehicleId = event?.vehicleId ?? vehicles?.[0]?.id ?? ""
+  const vehicle = vehicles?.find((item) => item.id === vehicleId)
+  const firstTemplate = repairTemplates?.find(
+    (template) => template.vehicleType === vehicle?.type
+  )
   return {
-    vehicleId: event?.vehicleId ?? vehicles?.[0]?.id ?? "",
+    vehicleId,
+    repairTemplateId: event?.repairTemplate?.id ?? firstTemplate?.id ?? "",
     type: event?.type ?? "repair",
-    title: event?.title ?? "",
-    dueAt: event?.dueAt ? event.dueAt.slice(0, 10) : "",
+    title: event?.title ?? firstTemplate?.name ?? "",
+    startDate:
+      event?.startDate?.slice(0, 10) ??
+      event?.dueAt?.slice(0, 10) ??
+      new Date().toISOString().slice(0, 10),
+    durationDays: event?.durationDays ?? firstTemplate?.durationDays ?? 1,
+    dueAt: event?.endDate?.slice(0, 10) ?? event?.dueAt?.slice(0, 10) ?? "",
     status: event?.status ?? undefined,
     completedAt: event?.completedAt?.slice(0, 10) ?? null,
     mileageKm: event?.mileageKm ?? null,
@@ -97,30 +114,47 @@ export function ServiceEventDialog({
   onOpenChange,
   event,
   vehicles,
+  repairTemplates,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   event?: ServiceEvent | null
   vehicles: FleetVehicle[]
+  repairTemplates: RepairTemplate[]
   onSave: (values: ServiceEventFormValues) => void
 }) {
   const isEdit = !!event
   const [form, setForm] = useState<ServiceEventFormValues>(() =>
-    createInitialForm(event, vehicles)
+    createInitialForm(event, vehicles, repairTemplates)
   )
+
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId)
+  const availableTemplates = repairTemplates.filter(
+    (template) => template.vehicleType === selectedVehicle?.type
+  )
+  const selectedTemplate = repairTemplates.find(
+    (template) => template.id === form.repairTemplateId
+  )
+  const calculatedEndDate = form.startDate
+    ? (() => {
+        const date = new Date(`${form.startDate}T00:00:00.000Z`)
+        date.setUTCDate(date.getUTCDate() + Math.max(form.durationDays, 1) - 1)
+        return date.toISOString().slice(0, 10)
+      })()
+    : ""
 
   const handleSave = () => {
     if (!form.vehicleId) {
       toast.error("Выберите технику")
       return
     }
-    if (!form.title.trim()) {
-      toast.error("Укажите краткое описание")
+    if (!form.repairTemplateId) {
+      toast.error("Выберите ремонт из справочника")
       return
     }
-    if (!form.defectDescription.trim()) {
-      toast.error("Опишите дефект или причину обслуживания")
+    if (!form.startDate) {
+      toast.error("Укажите дату начала ремонта")
       return
     }
     if (form.workLogs.some((log) => !log.performedAt || !log.title.trim())) {
@@ -129,7 +163,8 @@ export function ServiceEventDialog({
     }
     onSave({
       ...form,
-      title: form.title.trim(),
+      title: (form.title || selectedTemplate?.name || "").trim(),
+      dueAt: calculatedEndDate,
       defectDescription: form.defectDescription.trim(),
       notes: form.notes.trim(),
       workLogs: form.workLogs.map((log) => ({
@@ -186,7 +221,8 @@ export function ServiceEventDialog({
       ...form,
       status: "completed",
       completedAt: new Date().toISOString().slice(0, 10),
-      title: form.title.trim(),
+      title: (form.title || selectedTemplate?.name || "").trim(),
+      dueAt: calculatedEndDate,
       defectDescription: form.defectDescription.trim(),
       notes: form.notes.trim(),
       workLogs: form.workLogs.map((log) => ({
@@ -252,7 +288,21 @@ export function ServiceEventDialog({
               <Select
                 value={form.vehicleId}
                 onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, vehicleId: value }))
+                  setForm((prev) => {
+                    const nextVehicle = vehicles.find(
+                      (vehicle) => vehicle.id === value
+                    )
+                    const nextTemplate = repairTemplates.find(
+                      (template) => template.vehicleType === nextVehicle?.type
+                    )
+                    return {
+                      ...prev,
+                      vehicleId: value,
+                      repairTemplateId: nextTemplate?.id ?? "",
+                      title: nextTemplate?.name ?? "",
+                      durationDays: nextTemplate?.durationDays ?? 1,
+                    }
+                  })
                 }
                 disabled={isEdit}
               >
@@ -269,9 +319,51 @@ export function ServiceEventDialog({
               </Select>
             </div>
 
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Ремонт из справочника
+              </label>
+              <Select
+                value={form.repairTemplateId}
+                onValueChange={(value) => {
+                  const template = repairTemplates.find(
+                    (item) => item.id === value
+                  )
+                  setForm((prev) => ({
+                    ...prev,
+                    repairTemplateId: value,
+                    title: template?.name ?? prev.title,
+                    durationDays: template?.durationDays ?? prev.durationDays,
+                    type:
+                      template?.category === "diagnostics"
+                        ? "diagnostics"
+                        : template?.category === "scheduled_service"
+                          ? "maintenance"
+                          : "repair",
+                  }))
+                }}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue placeholder="Выберите ремонт" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTemplates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} · {template.durationDays} дн.
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availableTemplates.length === 0 && (
+                <p className="mt-1 text-xs text-red-600">
+                  Для выбранного типа техники нет активных позиций справочника.
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Тип
+                Тип заявки
               </label>
               <Select
                 value={form.type}
@@ -331,31 +423,69 @@ export function ServiceEventDialog({
 
             <div className={isEdit ? "sm:col-span-2" : ""}>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Краткое описание
+                Название
               </label>
               <Input
                 value={form.title}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, title: event.target.value }))
                 }
-                placeholder="ТО-2, диагностика гидравлики..."
+                placeholder="Берётся из справочника ремонта"
                 className="h-9"
               />
             </div>
 
             <div className={isEdit ? "" : "sm:col-span-2"}>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Дедлайн
+                Дата начала
               </label>
               <Input
                 type="date"
-                value={form.dueAt}
+                value={form.startDate}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, dueAt: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    startDate: event.target.value,
+                  }))
                 }
                 className="h-9"
               />
             </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Длительность, дней
+              </label>
+              <Input
+                type="number"
+                value={form.durationDays}
+                min={1}
+                max={60}
+                className="h-9"
+                readOnly
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Окончание
+              </label>
+              <Input value={calculatedEndDate || "—"} className="h-9" readOnly />
+            </div>
+
+            {selectedTemplate && (
+              <div className="rounded-lg border bg-muted/30 p-3 sm:col-span-2">
+                <p className="text-xs text-muted-foreground">Раздел ремонта</p>
+                <p className="mt-1 text-sm font-medium">
+                  {FLEET_REPAIR_CATEGORY_LABELS[selectedTemplate.category]}
+                </p>
+                {selectedTemplate.notes && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedTemplate.notes}
+                  </p>
+                )}
+              </div>
+            )}
 
             {isEdit && (
               <div>

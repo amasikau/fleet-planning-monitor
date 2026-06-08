@@ -5,10 +5,12 @@ import type {
   ServiceEvent,
   ServiceStats,
   FleetVehicle,
+  RepairTemplate,
 } from "@/lib/types"
 import { api } from "@/lib/api"
 import { ServiceStatsCards } from "@/components/service-events/service-stats"
 import { ServiceTable } from "@/components/service-events/service-table"
+import { RepairTemplateDirectory } from "@/components/service-events/repair-template-directory"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AlertCircleIcon } from "@hugeicons/core-free-icons"
@@ -26,18 +28,22 @@ export default function ServicePage() {
     completed: 0,
   })
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
+  const [repairTemplates, setRepairTemplates] = useState<RepairTemplate[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
-      const [eventsData, statsData, vehiclesData] = await Promise.all([
-        api.serviceEvents.getAll(),
-        api.serviceEvents.getStats(),
-        api.fleet.getAll(),
-      ])
+      const [eventsData, statsData, vehiclesData, repairTemplatesData] =
+        await Promise.all([
+          api.serviceEvents.getAll(),
+          api.serviceEvents.getStats(),
+          api.fleet.getAll(),
+          api.serviceEvents.getRepairTemplates(),
+        ])
       setEvents(eventsData)
       setStats(statsData)
       setVehicles(vehiclesData)
+      setRepairTemplates(repairTemplatesData)
     } catch (err) {
       toast.error(getErrorMessage(err, "Не удалось загрузить данные"))
     } finally {
@@ -90,9 +96,16 @@ export default function ServicePage() {
 
       <ServiceStatsCards stats={stats} />
 
+      <RepairTemplateDirectory
+        templates={repairTemplates}
+        canEdit={canEdit}
+        onDataChange={fetchData}
+      />
+
       <ServiceTable
         initialEvents={events}
         vehicles={vehicles}
+        repairTemplates={repairTemplates}
         onDataChange={fetchData}
         canCreateRequest={canCreateRequest}
       />

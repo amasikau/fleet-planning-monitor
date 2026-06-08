@@ -14,6 +14,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ServiceEventsService } from './service-events.service';
 import type { AuthUser } from './service-events.service';
 import { CreateServiceEventDto } from './dto/create-service-event.dto';
+import { CreateRepairTemplateDto } from './dto/create-repair-template.dto';
+import { UpdateRepairTemplateDto } from './dto/update-repair-template.dto';
 import { UpdateServiceEventDto } from './dto/update-service-event.dto';
 
 interface AuthenticatedRequest {
@@ -28,6 +30,32 @@ export class ServiceEventsController {
   @Get('stats')
   async getStats() {
     return this.service.getStats();
+  }
+
+  @Get('repair-templates')
+  async getRepairTemplates(
+    @Query('vehicleType') vehicleType?: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.service.getRepairTemplates({ vehicleType, includeInactive });
+  }
+
+  @Post('repair-templates')
+  async createRepairTemplate(@Body() dto: CreateRepairTemplateDto) {
+    return this.service.createRepairTemplate(dto);
+  }
+
+  @Put('repair-templates/:id')
+  async updateRepairTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateRepairTemplateDto,
+  ) {
+    return this.service.updateRepairTemplate(id, dto);
+  }
+
+  @Delete('repair-templates/:id')
+  async removeRepairTemplate(@Param('id') id: string) {
+    return this.service.removeRepairTemplate(id);
   }
 
   @Get()

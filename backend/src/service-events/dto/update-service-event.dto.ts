@@ -5,6 +5,8 @@ import {
   IsEnum,
   IsDateString,
   IsInt,
+  Max,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -30,6 +32,21 @@ export class UpdateServiceEventDto {
   @IsEnum(FleetServiceEventStatus)
   @IsOptional()
   status?: FleetServiceEventStatus;
+
+  @IsString()
+  @IsOptional()
+  repairTemplateId?: string | null;
+
+  @IsDateString()
+  @IsOptional()
+  startDate?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  durationDays?: number | null;
 
   @IsString()
   @IsOptional()

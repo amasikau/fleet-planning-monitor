@@ -6,6 +6,7 @@ import type {
   AvailableVehicle,
   FleetAuditEntry,
   FleetVehicle,
+  RepairTemplate,
   ServiceEvent,
   ServiceStats,
   SiteAuditEntry,
@@ -119,6 +120,27 @@ export const api = {
       return fetchApi<ServiceEvent[]>(`/service-events${qs}`)
     },
     getStats: () => fetchApi<ServiceStats>("/service-events/stats"),
+    getRepairTemplates: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : ""
+      return fetchApi<RepairTemplate[]>(`/service-events/repair-templates${qs}`)
+    },
+    createRepairTemplate: (data: Record<string, unknown>) =>
+      fetchApi<RepairTemplate>("/service-events/repair-templates", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    updateRepairTemplate: (id: string, data: Record<string, unknown>) =>
+      fetchApi<RepairTemplate>(`/service-events/repair-templates/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    deleteRepairTemplate: (id: string) =>
+      fetchApi<{ success: boolean }>(
+        `/service-events/repair-templates/${id}`,
+        {
+          method: "DELETE",
+        }
+      ),
     create: (data: Record<string, unknown>) =>
       fetchApi<ServiceEvent>("/service-events", {
         method: "POST",

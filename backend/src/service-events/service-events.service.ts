@@ -4,22 +4,45 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  FleetRepairCategory,
+  FleetRepairTemplate,
   FleetServiceEventStatus,
   FleetServiceEventType,
+  FleetVehicleType,
   Prisma,
   UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceEventDto } from './dto/create-service-event.dto';
+import { CreateRepairTemplateDto } from './dto/create-repair-template.dto';
+import { UpdateRepairTemplateDto } from './dto/update-repair-template.dto';
 import { UpdateServiceEventDto } from './dto/update-service-event.dto';
+
+export interface RepairTemplateView {
+  id: string;
+  vehicleType: FleetVehicleType;
+  category: FleetRepairCategory;
+  name: string;
+  durationDays: number;
+  sortOrder: number;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ServiceEventView {
   id: string;
   vehicleId: string;
   vehicleLabel: string;
+  vehicleType: FleetVehicleType;
+  repairTemplate: RepairTemplateView | null;
   type: FleetServiceEventType;
   status: FleetServiceEventStatus;
   title: string;
+  startDate: string | null;
+  endDate: string | null;
+  durationDays: number;
   dueAt: string | null;
   completedAt: string | null;
   mileageKm: number | null;
@@ -60,8 +83,10 @@ const serviceEventInclude = {
       brand: true,
       model: true,
       plateNumber: true,
+      type: true,
     },
   },
+  repairTemplate: true,
   reporter: {
     select: {
       id: true,
@@ -103,6 +128,79 @@ export class ServiceEventsService {
       .join(' ');
   }
 
+  private normalizeDate(value: string | Date) {
+    const date = value instanceof Date ? new Date(value) : new Date(value);
+    date.setUTCHours(0, 0, 0, 0);
+    return date;
+  }
+
+  private addDays(date: Date, days: number) {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + days);
+    next.setUTCHours(0, 0, 0, 0);
+    return next;
+  }
+
+  private formatTemplate(template: {
+    id: string;
+    vehicleType: FleetVehicleType;
+    category: FleetRepairCategory;
+    name: string;
+    durationDays: number;
+    sortOrder: number;
+    notes: string;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }): RepairTemplateView {
+    return {
+      id: template.id,
+      vehicleType: template.vehicleType,
+      category: template.category,
+      name: template.name,
+      durationDays: template.durationDays,
+      sortOrder: template.sortOrder,
+      notes: template.notes,
+      isActive: template.isActive,
+      createdAt: template.createdAt.toISOString(),
+      updatedAt: template.updatedAt.toISOString(),
+    };
+  }
+
+  private async getTemplateForVehicle(
+    templateId: string | null | undefined,
+    vehicleType: FleetVehicleType,
+  ) {
+    if (!templateId) return null;
+
+    const template = await this.prisma.fleetRepairTemplate.findUnique({
+      where: { id: templateId },
+    });
+    if (!template) throw new NotFoundException('Ремонт из справочника не найден');
+    if (!template.isActive) {
+      throw new BadRequestException('Выбранный ремонт отключён в справочнике');
+    }
+    if (template.vehicleType !== vehicleType) {
+      throw new BadRequestException(
+        'Выбранный ремонт не подходит для типа выбранной техники',
+      );
+    }
+
+    return template;
+  }
+
+  private buildServicePeriod(params: {
+    startDate?: string | Date | null;
+    dueAt?: string | Date | null;
+    durationDays?: number | null;
+  }) {
+    const durationDays = Math.max(params.durationDays ?? 1, 1);
+    const startSource = params.startDate ?? params.dueAt ?? new Date();
+    const startDate = this.normalizeDate(startSource);
+    const endDate = this.addDays(startDate, durationDays - 1);
+    return { startDate, endDate, durationDays };
+  }
+
   private getPermissions() {
     return {
       canEdit: true,
@@ -118,9 +216,16 @@ export class ServiceEventsService {
       id: event.id,
       vehicleId: event.vehicle.id,
       vehicleLabel: `${event.vehicle.brand} ${event.vehicle.model} · ${event.vehicle.plateNumber}`,
+      vehicleType: event.vehicle.type,
+      repairTemplate: event.repairTemplate
+        ? this.formatTemplate(event.repairTemplate)
+        : null,
       type: event.type,
       status: event.status,
       title: event.title,
+      startDate: event.startDate?.toISOString() ?? null,
+      endDate: event.endDate?.toISOString() ?? null,
+      durationDays: event.durationDays,
       dueAt: event.dueAt?.toISOString() ?? null,
       completedAt: event.completedAt?.toISOString() ?? null,
       mileageKm: event.mileageKm,
@@ -209,6 +314,7 @@ export class ServiceEventsService {
         (event) =>
           event.title.toLowerCase().includes(search) ||
           event.vehicleLabel.toLowerCase().includes(search) ||
+          (event.repairTemplate?.name ?? '').toLowerCase().includes(search) ||
           (event.reporter?.fullName ?? '').toLowerCase().includes(search) ||
           event.defectDescription.toLowerCase().includes(search) ||
           event.notes.toLowerCase().includes(search),
@@ -229,6 +335,88 @@ export class ServiceEventsService {
     return { scheduled, inProgress, overdue, completed };
   }
 
+  async getRepairTemplates(query: {
+    vehicleType?: string;
+    includeInactive?: string;
+  }): Promise<RepairTemplateView[]> {
+    const where: Prisma.FleetRepairTemplateWhereInput = {};
+    if (query.vehicleType) {
+      where.vehicleType = query.vehicleType as FleetVehicleType;
+    }
+    if (query.includeInactive !== 'true') {
+      where.isActive = true;
+    }
+
+    const templates = await this.prisma.fleetRepairTemplate.findMany({
+      where,
+      orderBy: [
+        { vehicleType: 'asc' },
+        { sortOrder: 'asc' },
+        { category: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return templates.map((template) => this.formatTemplate(template));
+  }
+
+  async createRepairTemplate(
+    dto: CreateRepairTemplateDto,
+  ): Promise<RepairTemplateView> {
+    const template = await this.prisma.fleetRepairTemplate.create({
+      data: {
+        vehicleType: dto.vehicleType,
+        category: dto.category,
+        name: dto.name.trim(),
+        durationDays: dto.durationDays,
+        sortOrder: dto.sortOrder ?? 100,
+        notes: dto.notes?.trim() ?? '',
+        isActive: dto.isActive ?? true,
+      },
+    });
+
+    return this.formatTemplate(template);
+  }
+
+  async updateRepairTemplate(
+    id: string,
+    dto: UpdateRepairTemplateDto,
+  ): Promise<RepairTemplateView> {
+    const existing = await this.prisma.fleetRepairTemplate.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Ремонт из справочника не найден');
+
+    const template = await this.prisma.fleetRepairTemplate.update({
+      where: { id },
+      data: {
+        vehicleType: dto.vehicleType,
+        category: dto.category,
+        name: dto.name !== undefined ? dto.name.trim() : undefined,
+        durationDays: dto.durationDays,
+        sortOrder: dto.sortOrder,
+        notes: dto.notes !== undefined ? dto.notes.trim() : undefined,
+        isActive: dto.isActive,
+      },
+    });
+
+    return this.formatTemplate(template);
+  }
+
+  async removeRepairTemplate(id: string): Promise<{ success: boolean }> {
+    const existing = await this.prisma.fleetRepairTemplate.findUnique({
+      where: { id },
+    });
+    if (!existing) throw new NotFoundException('Ремонт из справочника не найден');
+
+    await this.prisma.fleetRepairTemplate.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return { success: true };
+  }
+
   async create(
     dto: CreateServiceEventDto,
     actor: AuthUser,
@@ -238,17 +426,31 @@ export class ServiceEventsService {
     });
     if (!vehicle) throw new NotFoundException('Техника не найдена');
 
-    if (!dto.title.trim()) {
-      throw new BadRequestException('Укажите название заявки');
+    const template = await this.getTemplateForVehicle(
+      dto.repairTemplateId,
+      vehicle.type,
+    );
+    const title = dto.title?.trim() || template?.name || '';
+    if (!title) {
+      throw new BadRequestException('Выберите ремонт из справочника или укажите название заявки');
     }
+    const period = this.buildServicePeriod({
+      startDate: dto.startDate,
+      dueAt: dto.dueAt,
+      durationDays: template?.durationDays ?? dto.durationDays ?? 1,
+    });
 
     const event = await this.prisma.fleetServiceEvent.create({
       data: {
         vehicleId: dto.vehicleId,
+        repairTemplateId: template?.id ?? null,
         type: dto.type,
         status: 'scheduled',
-        title: dto.title.trim(),
-        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        title,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        durationDays: period.durationDays,
+        dueAt: period.endDate,
         reportedById: actor.id,
         defectDescription: dto.defectDescription?.trim() ?? '',
         notes: dto.notes?.trim() ?? '',
@@ -271,14 +473,44 @@ export class ServiceEventsService {
     if (!existing) throw new NotFoundException('Заявка не найдена');
 
     const updateData: Prisma.FleetServiceEventUpdateInput = {};
+    let nextTemplate: FleetRepairTemplate | null = existing.repairTemplate;
 
     if (dto.status !== undefined) updateData.status = dto.status;
-    if (dto.dueAt !== undefined) {
-      updateData.dueAt = dto.dueAt ? new Date(dto.dueAt) : null;
+    if (dto.repairTemplateId !== undefined) {
+      nextTemplate = dto.repairTemplateId
+        ? await this.getTemplateForVehicle(
+            dto.repairTemplateId,
+            existing.vehicle.type,
+          )
+        : null;
+      updateData.repairTemplate = nextTemplate
+        ? { connect: { id: nextTemplate.id } }
+        : { disconnect: true };
+    }
+    if (
+      dto.startDate !== undefined ||
+      dto.durationDays !== undefined ||
+      dto.repairTemplateId !== undefined ||
+      dto.dueAt !== undefined
+    ) {
+      const period = this.buildServicePeriod({
+        startDate: dto.startDate ?? existing.startDate,
+        dueAt: dto.dueAt ?? existing.dueAt,
+        durationDays:
+          nextTemplate?.durationDays ?? dto.durationDays ?? existing.durationDays,
+      });
+      updateData.startDate = period.startDate;
+      updateData.endDate = period.endDate;
+      updateData.durationDays = period.durationDays;
+      updateData.dueAt = period.endDate;
     }
     if (dto.notes !== undefined) updateData.notes = dto.notes.trim();
     if (dto.mileageKm !== undefined) updateData.mileageKm = dto.mileageKm;
-    if (dto.title !== undefined) updateData.title = dto.title.trim();
+    if (dto.title !== undefined) {
+      updateData.title = dto.title.trim();
+    } else if (dto.repairTemplateId !== undefined && nextTemplate) {
+      updateData.title = nextTemplate.name;
+    }
     if (dto.defectDescription !== undefined) {
       updateData.defectDescription = dto.defectDescription.trim();
     }

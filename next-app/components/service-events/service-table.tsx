@@ -30,6 +30,7 @@ import type {
   ServiceEventStatus,
   ServiceEventType,
   FleetVehicle,
+  RepairTemplate,
 } from "@/lib/types"
 import {
   SERVICE_EVENT_STATUS_LABELS,
@@ -80,7 +81,7 @@ const typeBadgeStyles: Record<ServiceEventType, string> = {
     "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 }
 
-type SortKey = "vehicleLabel" | "title" | "type" | "status" | "dueAt"
+type SortKey = "vehicleLabel" | "title" | "type" | "status" | "startDate"
 type SortDir = "asc" | "desc"
 
 function formatDate(value: string | null) {
@@ -95,6 +96,7 @@ function formatDate(value: string | null) {
 interface ServiceTableProps {
   initialEvents: ServiceEvent[]
   vehicles: FleetVehicle[]
+  repairTemplates: RepairTemplate[]
   onDataChange?: () => void
   canCreateRequest: boolean
 }
@@ -102,6 +104,7 @@ interface ServiceTableProps {
 export function ServiceTable({
   initialEvents,
   vehicles,
+  repairTemplates,
   onDataChange,
   canCreateRequest,
 }: ServiceTableProps) {
@@ -119,7 +122,7 @@ export function ServiceTable({
     null
   )
   const [typeFilter, setTypeFilter] = useState<ServiceEventType | null>(null)
-  const [sortKey, setSortKey] = useState<SortKey>("dueAt")
+  const [sortKey, setSortKey] = useState<SortKey>("startDate")
   const [sortDir, setSortDir] = useState<SortDir>("asc")
 
   const toggleSort = (key: SortKey) => {
@@ -150,12 +153,12 @@ export function ServiceTable({
 
     result = [...result].sort((a, b) => {
       let cmp: number
-      if (sortKey === "dueAt") {
-        const aTime = a.dueAt
-          ? new Date(a.dueAt).getTime()
+      if (sortKey === "startDate") {
+        const aTime = a.startDate
+          ? new Date(a.startDate).getTime()
           : Number.MAX_SAFE_INTEGER
-        const bTime = b.dueAt
-          ? new Date(b.dueAt).getTime()
+        const bTime = b.startDate
+          ? new Date(b.startDate).getTime()
           : Number.MAX_SAFE_INTEGER
         cmp = aTime - bTime
       } else if (sortKey === "type") {
@@ -193,8 +196,11 @@ export function ServiceTable({
 
   const buildPayload = (values: ServiceEventFormValues) => ({
     vehicleId: values.vehicleId,
+    repairTemplateId: values.repairTemplateId,
     type: values.type,
     title: values.title,
+    startDate: values.startDate,
+    durationDays: values.durationDays,
     dueAt: values.dueAt || undefined,
     status: values.status,
     completedAt: values.completedAt,
@@ -250,11 +256,11 @@ export function ServiceTable({
           </p>
         </div>
         <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">Без дедлайна</p>
+          <p className="text-xs text-muted-foreground">Без периода</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">
             {
               events.filter(
-                (event) => event.status !== "completed" && !event.dueAt
+                (event) => event.status !== "completed" && !event.startDate
               ).length
             }
           </p>
@@ -444,7 +450,7 @@ export function ServiceTable({
                     </TableHead>
                     <TableHead
                       className="cursor-pointer select-none"
-                      onClick={() => toggleSort("dueAt")}
+                      onClick={() => toggleSort("startDate")}
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <HugeiconsIcon
@@ -452,7 +458,7 @@ export function ServiceTable({
                           strokeWidth={2}
                           className="size-3.5 text-muted-foreground"
                         />
-                        Дедлайн{renderSortIcon("dueAt")}
+                        Период{renderSortIcon("startDate")}
                       </span>
                     </TableHead>
                     <TableHead className="w-12" />
@@ -497,6 +503,15 @@ export function ServiceTable({
                                 Работ: {event.workLogs.length}
                               </Badge>
                             )}
+                            {event.repairTemplate && (
+                              <Badge
+                                variant="outline"
+                                className="mt-2 ml-1 border-slate-200 text-[10px] text-muted-foreground"
+                              >
+                                {event.durationDays} дн. ·{" "}
+                                {event.repairTemplate.name}
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -516,7 +531,9 @@ export function ServiceTable({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground tabular-nums">
-                          {formatDate(event.dueAt)}
+                          {formatDate(event.startDate)}
+                          {" — "}
+                          {formatDate(event.endDate)}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -573,6 +590,7 @@ export function ServiceTable({
           open={showAddDialog}
           onOpenChange={setShowAddDialog}
           vehicles={vehicles}
+          repairTemplates={repairTemplates}
           onSave={handleSave}
         />
       )}
@@ -583,6 +601,7 @@ export function ServiceTable({
           onOpenChange={(open) => !open && setEditingEvent(null)}
           event={editingEvent}
           vehicles={vehicles}
+          repairTemplates={repairTemplates}
           onSave={handleSave}
         />
       )}

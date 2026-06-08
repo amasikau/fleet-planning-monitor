@@ -171,6 +171,44 @@ export const SERVICE_EVENT_TYPE_LABELS: Record<ServiceEventType, string> = {
   diagnostics: "Диагностика",
 }
 
+export type FleetRepairCategory =
+  | "engine"
+  | "transmission"
+  | "hydraulics"
+  | "electrical"
+  | "chassis"
+  | "brakes"
+  | "tires"
+  | "working_equipment"
+  | "diagnostics"
+  | "scheduled_service"
+
+export const FLEET_REPAIR_CATEGORY_LABELS: Record<FleetRepairCategory, string> = {
+  engine: "Двигатель",
+  transmission: "Коробка передач",
+  hydraulics: "Гидравлические системы",
+  electrical: "Электрика",
+  chassis: "Ходовая часть",
+  brakes: "Тормозная система",
+  tires: "Шины",
+  working_equipment: "Рабочее оборудование",
+  diagnostics: "Диагностика",
+  scheduled_service: "Плановое ТО",
+}
+
+export interface RepairTemplate {
+  id: string
+  vehicleType: FleetVehicleType
+  category: FleetRepairCategory
+  name: string
+  durationDays: number
+  sortOrder: number
+  notes: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export type ServiceEventStatus =
   | "scheduled"
   | "in_progress"
@@ -188,9 +226,14 @@ export interface ServiceEvent {
   id: string
   vehicleId: string
   vehicleLabel: string
+  vehicleType: FleetVehicleType
+  repairTemplate: RepairTemplate | null
   type: ServiceEventType
   status: ServiceEventStatus
   title: string
+  startDate: string | null
+  endDate: string | null
+  durationDays: number
   dueAt: string | null
   completedAt: string | null
   mileageKm: number | null

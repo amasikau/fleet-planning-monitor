@@ -13,7 +13,7 @@ import {
 export function ServiceStatsCards({ stats }: { stats: ServiceStats }) {
   const items = [
     {
-      label: "Ожидает назначения",
+      label: "Запланировано",
       value: stats.scheduled,
       icon: Calendar03Icon,
       iconClass: "text-sky-600",

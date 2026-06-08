@@ -114,6 +114,19 @@ enum FleetServiceEventStatus {
   completed
 }
 
+enum FleetRepairCategory {
+  engine
+  transmission
+  hydraulics
+  electrical
+  chassis
+  brakes
+  tires
+  working_equipment
+  diagnostics
+  scheduled_service
+}
+
 enum FleetAuditAction {
   create
   edit
@@ -157,9 +170,14 @@ model FleetServiceEvent {
   id                String                  @id @default(uuid())
   vehicleId         String
   vehicle           FleetVehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  repairTemplateId  String?
+  repairTemplate    FleetRepairTemplate?    @relation(fields: [repairTemplateId], references: [id], onDelete: SetNull)
   type              FleetServiceEventType
   status            FleetServiceEventStatus
   title             String
+  startDate         DateTime?
+  endDate           DateTime?
+  durationDays      Int                     @default(1)
   dueAt             DateTime?
   completedAt       DateTime?
   mileageKm         Int?
@@ -172,9 +190,32 @@ model FleetServiceEvent {
   workLogs          FleetServiceWorkLog[]
 
   @@index([vehicleId])
+  @@index([repairTemplateId])
   @@index([status])
+  @@index([startDate])
+  @@index([endDate])
   @@index([dueAt])
   @@index([reportedById])
+}
+
+model FleetRepairTemplate {
+  id           String              @id @default(uuid())
+  vehicleType  FleetVehicleType
+  category     FleetRepairCategory
+  name         String
+  durationDays Int                 @default(1)
+  sortOrder    Int                 @default(100)
+  notes        String              @default("")
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  serviceEvents FleetServiceEvent[]
+
+  @@index([vehicleType])
+  @@index([category])
+  @@index([sortOrder])
+  @@index([isActive])
 }
 
 model FleetServiceWorkLog {

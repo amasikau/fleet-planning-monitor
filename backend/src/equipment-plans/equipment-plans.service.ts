@@ -349,6 +349,67 @@ export class EquipmentPlansService {
     return `${vehicleId}:${this.dateKey(workDate)}:${shift}`;
   }
 
+  private serviceBlockingTypes = [
+    'maintenance',
+    'inspection',
+    'repair',
+    'diagnostics',
+  ] as const;
+
+  private serviceBlockSlotKeys(vehicleId: string, startDate: Date, endDate: Date) {
+    return this.daysBetweenInclusive(startDate, endDate).flatMap((date) => [
+      this.planSlotKey(vehicleId, date, 'day'),
+      this.planSlotKey(vehicleId, date, 'night'),
+    ]);
+  }
+
+  private getServiceDateRange(event: {
+    startDate: Date | null;
+    endDate: Date | null;
+    dueAt: Date | null;
+    createdAt?: Date;
+  }) {
+    const startDate = event.startDate ?? event.dueAt ?? event.createdAt ?? null;
+    const endDate = event.endDate ?? event.dueAt ?? startDate;
+    if (!startDate || !endDate) return null;
+    return {
+      startDate: this.normalizeDate(startDate.toISOString()),
+      endDate: this.normalizeDate(endDate.toISOString()),
+    };
+  }
+
+  private serviceOverlapsDate(event: {
+    startDate: Date | null;
+    endDate: Date | null;
+    dueAt: Date | null;
+    createdAt?: Date;
+  }, date: Date) {
+    const range = this.getServiceDateRange(event);
+    if (!range) return false;
+    const normalizedDate = this.normalizeDate(date.toISOString());
+    return range.startDate <= normalizedDate && range.endDate >= normalizedDate;
+  }
+
+  private serviceBlockingWhere(
+    startDate: Date,
+    endDate: Date,
+  ): Prisma.FleetServiceEventWhereInput {
+    return {
+      status: { not: 'completed' },
+      type: { in: [...this.serviceBlockingTypes] },
+      OR: [
+        {
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+        {
+          startDate: null,
+          dueAt: { gte: startDate, lte: endDate },
+        },
+      ],
+    };
+  }
+
   private normalizeOptionalId(value?: string | null) {
     return value?.trim() ? value : null;
   }
@@ -751,13 +812,32 @@ export class EquipmentPlansService {
     return site;
   }
 
-  private async assertVehicle(vehicleId: string) {
+  private async assertVehicle(vehicleId: string, workDate?: Date) {
     const vehicle = await this.prisma.fleetVehicle.findUnique({
       where: { id: vehicleId },
     });
     if (!vehicle) throw new NotFoundException('Техника не найдена');
     if (vehicle.status === 'maintenance' || vehicle.status === 'repair') {
       throw new ConflictException('Техника в ремонте или на ТО недоступна для планирования');
+    }
+    if (workDate) {
+      const blockingService = await this.prisma.fleetServiceEvent.findFirst({
+        where: {
+          vehicleId,
+          ...this.serviceBlockingWhere(workDate, workDate),
+        },
+        select: {
+          title: true,
+          startDate: true,
+          endDate: true,
+          dueAt: true,
+        },
+      });
+      if (blockingService) {
+        throw new ConflictException(
+          `Техника недоступна ${this.dateKey(workDate)}: запланировано ТО/ремонт "${blockingService.title}".`,
+        );
+      }
     }
     return vehicle;
   }
@@ -1012,7 +1092,7 @@ export class EquipmentPlansService {
       ? this.addDays(maxEndDate, 90)
       : maxEndDate;
 
-    const [vehicles, existingPlans] = await Promise.all([
+    const [vehicles, existingPlans, blockingServices] = await Promise.all([
       this.prisma.fleetVehicle.findMany({
         select: draftVehicleSelect,
       }),
@@ -1032,6 +1112,18 @@ export class EquipmentPlansService {
           vehicle: { select: { type: true } },
         },
       }),
+      this.prisma.fleetServiceEvent.findMany({
+        where: this.serviceBlockingWhere(startDate, searchEndDate),
+        select: {
+          vehicleId: true,
+          title: true,
+          startDate: true,
+          endDate: true,
+          dueAt: true,
+          createdAt: true,
+          vehicle: { select: { type: true } },
+        },
+      }),
     ]);
 
     const getStageDateKeys = (stageStart: Date, durationDays: number) =>
@@ -1045,15 +1137,44 @@ export class EquipmentPlansService {
     const getOccupiedVehicleIds = (
       vehicleType: FleetVehicleType,
       stageDateKeys: Set<string>,
+    ) => {
+      const occupiedByPlans = existingPlans
+        .filter(
+          (plan) =>
+            plan.vehicle.type === vehicleType &&
+            stageDateKeys.has(this.dateKey(plan.workDate)),
+        )
+        .map((plan) => plan.vehicleId);
+      const occupiedByService = blockingServices
+        .filter(
+          (event) =>
+            event.vehicle.type === vehicleType &&
+            [...stageDateKeys].some((dateKey) =>
+              this.serviceOverlapsDate(event, new Date(`${dateKey}T00:00:00.000Z`)),
+            ),
+        )
+        .map((event) => event.vehicleId);
+
+      return [...new Set([...occupiedByPlans, ...occupiedByService])];
+    };
+
+    const getServiceBlockedVehicleIds = (
+      vehicleType: FleetVehicleType,
+      stageDateKeys: Set<string>,
     ) => [
       ...new Set(
-        existingPlans
+        blockingServices
           .filter(
-            (plan) =>
-              plan.vehicle.type === vehicleType &&
-              stageDateKeys.has(this.dateKey(plan.workDate)),
+            (event) =>
+              event.vehicle.type === vehicleType &&
+              [...stageDateKeys].some((dateKey) =>
+                this.serviceOverlapsDate(
+                  event,
+                  new Date(`${dateKey}T00:00:00.000Z`),
+                ),
+              ),
           )
-          .map((plan) => plan.vehicleId),
+          .map((event) => event.vehicleId),
       ),
     ];
 
@@ -1142,15 +1263,25 @@ export class EquipmentPlansService {
               vehicle.type === rule.vehicleType &&
               (vehicle.status === 'active' || vehicle.status === 'reserve'),
           ).length;
-          const repairCount = vehicles.filter(
-            (vehicle) =>
-              vehicle.type === rule.vehicleType &&
-              (vehicle.status === 'maintenance' || vehicle.status === 'repair'),
-          ).length;
           const occupiedVehicleIds = getOccupiedVehicleIds(
             rule.vehicleType,
             stageDateKeys,
           );
+          const serviceBlockedVehicleIds = getServiceBlockedVehicleIds(
+            rule.vehicleType,
+            stageDateKeys,
+          );
+          const repairVehicleIds = new Set([
+            ...vehicles
+              .filter(
+                (vehicle) =>
+                  vehicle.type === rule.vehicleType &&
+                  (vehicle.status === 'maintenance' ||
+                    vehicle.status === 'repair'),
+              )
+              .map((vehicle) => vehicle.id),
+            ...serviceBlockedVehicleIds,
+          ]);
           const conflictCount = occupiedVehicleIds.length;
           const availableVehicles = getAvailableVehicles(
             rule.vehicleType,
@@ -1161,7 +1292,7 @@ export class EquipmentPlansService {
           const { risks, riskLevel } = this.buildDraftRisk({
             requiredCount,
             availableCount,
-            repairCount,
+            repairCount: repairVehicleIds.size,
             conflictCount,
             calculationKind,
           });
@@ -1174,7 +1305,7 @@ export class EquipmentPlansService {
             calculationKind,
             calculationNote,
             availableCount,
-            repairCount,
+            repairCount: repairVehicleIds.size,
             conflictCount,
             occupiedVehicleIds,
             availableVehicles,
@@ -1287,23 +1418,46 @@ export class EquipmentPlansService {
     });
 
     const occupied = new Set<string>();
-    const existingPlans = await this.prisma.equipmentPlanAssignment.findMany({
-      where: {
-        siteId: dto.replaceExisting ? { not: draft.siteId } : undefined,
-        workDate: {
-          gte: new Date(draft.startDate),
-          lte: draft.stages.reduce((latest, stage) => {
-            const endDate = new Date(stage.endDate);
-            return endDate > latest ? endDate : latest;
-          }, new Date(draft.startDate)),
+    const draftStartDate = new Date(draft.startDate);
+    const draftEndDate = draft.stages.reduce((latest, stage) => {
+      const endDate = new Date(stage.endDate);
+      return endDate > latest ? endDate : latest;
+    }, draftStartDate);
+    const [existingPlans, blockingServices] = await Promise.all([
+      this.prisma.equipmentPlanAssignment.findMany({
+        where: {
+          siteId: dto.replaceExisting ? { not: draft.siteId } : undefined,
+          workDate: {
+            gte: draftStartDate,
+            lte: draftEndDate,
+          },
+          shift: 'day',
+          status: { not: 'failed' },
         },
-        shift: 'day',
-        status: { not: 'failed' },
-      },
-      select: { vehicleId: true, workDate: true, shift: true },
-    });
+        select: { vehicleId: true, workDate: true, shift: true },
+      }),
+      this.prisma.fleetServiceEvent.findMany({
+        where: this.serviceBlockingWhere(draftStartDate, draftEndDate),
+        select: {
+          vehicleId: true,
+          startDate: true,
+          endDate: true,
+          dueAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
     existingPlans.forEach((plan) => {
       occupied.add(this.planSlotKey(plan.vehicleId, plan.workDate, plan.shift));
+    });
+    blockingServices.forEach((event) => {
+      const range = this.getServiceDateRange(event);
+      if (!range) return;
+      this.serviceBlockSlotKeys(
+        event.vehicleId,
+        range.startDate,
+        range.endDate,
+      ).forEach((key) => occupied.add(key));
     });
 
     await this.prisma.$transaction(async (tx) => {
@@ -1811,7 +1965,8 @@ export class EquipmentPlansService {
     createdById: string,
   ): Promise<EquipmentPlanView> {
     await this.assertSite(dto.siteId);
-    const vehicle = await this.assertVehicle(dto.vehicleId);
+    const workDate = this.normalizeDate(dto.workDate);
+    const vehicle = await this.assertVehicle(dto.vehicleId, workDate);
 
     let stageId = this.normalizeOptionalId(dto.stageId);
     const demandId = this.normalizeOptionalId(dto.demandId);
@@ -1834,7 +1989,7 @@ export class EquipmentPlansService {
           stageId,
           demandId,
           vehicleId: dto.vehicleId,
-          workDate: this.normalizeDate(dto.workDate),
+          workDate,
           shift: dto.shift,
           plannedHours: dto.plannedHours,
           actualHours: dto.actualHours ?? null,
@@ -1869,6 +2024,9 @@ export class EquipmentPlansService {
 
     const siteId = dto.siteId ?? existing.siteId;
     const vehicleId = dto.vehicleId ?? existing.vehicleId;
+    const workDate = dto.workDate
+      ? this.normalizeDate(dto.workDate)
+      : existing.workDate;
 
     if (dto.siteId) await this.assertSite(siteId);
 
@@ -1878,7 +2036,7 @@ export class EquipmentPlansService {
       dto.workDate !== undefined ||
       dto.shift !== undefined;
     const vehicle = shouldValidateVehicleAvailability
-      ? await this.assertVehicle(vehicleId)
+      ? await this.assertVehicle(vehicleId, workDate)
       : await this.prisma.fleetVehicle.findUnique({ where: { id: vehicleId } });
 
     if (!vehicle) throw new NotFoundException('Техника не найдена');
@@ -1914,7 +2072,7 @@ export class EquipmentPlansService {
               : undefined,
           demandId: dto.demandId !== undefined ? demandId : undefined,
           vehicleId: dto.vehicleId,
-          workDate: dto.workDate ? this.normalizeDate(dto.workDate) : undefined,
+          workDate: dto.workDate ? workDate : undefined,
           shift: dto.shift,
           plannedHours: dto.plannedHours,
           actualHours: dto.actualHours,

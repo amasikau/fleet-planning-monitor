@@ -20,6 +20,7 @@ async function main() {
   await prisma.constructionSite.deleteMany();
   await prisma.fleetAuditLog.deleteMany();
   await prisma.fleetServiceEvent.deleteMany();
+  await prisma.fleetRepairTemplate.deleteMany();
   await prisma.fleetVehicle.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.session.deleteMany();
@@ -592,14 +593,161 @@ async function main() {
     },
   });
 
+  const dumpTruckTo2 = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'dump_truck',
+      category: 'scheduled_service',
+      name: 'ТО-2 самосвала: масла, фильтры, тормозная система',
+      durationDays: 2,
+      sortOrder: 10,
+      notes: 'Плановое обслуживание с выводом техники из графика на две смены.',
+    },
+  });
+
+  const dumpTruckHydraulics = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'dump_truck',
+      category: 'hydraulics',
+      name: 'Ревизия гидросистемы подъёма кузова',
+      durationDays: 3,
+      sortOrder: 20,
+      notes: 'Диагностика гидроцилиндра, рукавов высокого давления и насоса.',
+    },
+  });
+
+  const dumpTruckTransmission = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'dump_truck',
+      category: 'transmission',
+      name: 'Ремонт сцепления и коробки передач самосвала',
+      durationDays: 4,
+      sortOrder: 30,
+      notes: 'Работы требуют снятия узлов трансмиссии.',
+    },
+  });
+
+  const craneHydraulics = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'crane',
+      category: 'hydraulics',
+      name: 'Проверка гидравлики стрелы и опор автокрана',
+      durationDays: 2,
+      sortOrder: 10,
+      notes: 'Обязательная проверка перед работами на временных ограждениях.',
+    },
+  });
+
+  const excavatorHydraulics = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'excavator',
+      category: 'hydraulics',
+      name: 'Ремонт гидроцилиндра стрелы экскаватора',
+      durationDays: 5,
+      sortOrder: 10,
+      notes: 'Включает снятие цилиндра, замену манжет и проверку давления.',
+    },
+  });
+
+  const excavatorChassis = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'excavator',
+      category: 'chassis',
+      name: 'Ремонт ходовой части гусеничного экскаватора',
+      durationDays: 4,
+      sortOrder: 20,
+      notes: 'Проверка катков, траков и натяжителей.',
+    },
+  });
+
+  const loaderTransmission = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'loader',
+      category: 'transmission',
+      name: 'Диагностика трансмиссии фронтального погрузчика',
+      durationDays: 2,
+      sortOrder: 10,
+      notes: 'Проверка гидротрансформатора и мостов.',
+    },
+  });
+
+  const paverWorkingEquipment = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'asphalt_paver',
+      category: 'working_equipment',
+      name: 'Ремонт выглаживающей плиты асфальтоукладчика',
+      durationDays: 3,
+      sortOrder: 10,
+      notes: 'Работы критичны для качества укладки покрытия.',
+    },
+  });
+
+  const rollerVibration = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'road_roller',
+      category: 'working_equipment',
+      name: 'Ремонт вибровозбудителя дорожного катка',
+      durationDays: 3,
+      sortOrder: 10,
+      notes: 'Техника недоступна для этапов уплотнения на весь период ремонта.',
+    },
+  });
+
+  const millingDrum = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'road_milling_machine',
+      category: 'working_equipment',
+      name: 'Замена резцов и диагностика барабана дорожной фрезы',
+      durationDays: 2,
+      sortOrder: 10,
+      notes: 'Планируется перед фрезерованием покрытия.',
+    },
+  });
+
+  const passengerCarBrakes = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'passenger_car',
+      category: 'brakes',
+      name: 'Замена тормозных колодок и масла',
+      durationDays: 2,
+      sortOrder: 10,
+      notes: 'Окно ремонта учитывается при назначении машины на объект.',
+    },
+  });
+
+  const vanScheduledService = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'van',
+      category: 'scheduled_service',
+      name: 'Плановое ТО фургона снабжения',
+      durationDays: 1,
+      sortOrder: 10,
+      notes: 'Однодневное обслуживание перед выходом в резерв.',
+    },
+  });
+
+  const flatbedChassis = await prisma.fleetRepairTemplate.create({
+    data: {
+      vehicleType: 'flatbed_truck',
+      category: 'chassis',
+      name: 'Ремонт подвески и рамы бортового автомобиля',
+      durationDays: 3,
+      sortOrder: 10,
+      notes: 'Выводит технику из подвоза знаков и малой механизации.',
+    },
+  });
+
   await prisma.fleetServiceEvent.createMany({
     data: [
       {
         vehicleId: kamazDump.id,
+        repairTemplateId: dumpTruckTo2.id,
         type: 'maintenance',
         status: 'scheduled',
-        title: 'Плановое ТО-2',
-        dueAt: new Date('2026-04-18T08:00:00.000Z'),
+        title: dumpTruckTo2.name,
+        startDate: new Date('2026-06-18T00:00:00.000Z'),
+        endDate: new Date('2026-06-19T00:00:00.000Z'),
+        durationDays: dumpTruckTo2.durationDays,
+        dueAt: new Date('2026-06-19T00:00:00.000Z'),
         mileageKm: 85000,
         notes: 'Замена масла, фильтров и проверка тормозной системы.',
       },
@@ -608,6 +756,9 @@ async function main() {
         type: 'inspection',
         status: 'completed',
         title: 'Предрейсовый техосмотр',
+        startDate: new Date('2026-03-28T00:00:00.000Z'),
+        endDate: new Date('2026-03-28T00:00:00.000Z'),
+        durationDays: 1,
         dueAt: new Date('2026-03-28T06:30:00.000Z'),
         completedAt: new Date('2026-03-28T06:45:00.000Z'),
         mileageKm: 82910,
@@ -615,10 +766,14 @@ async function main() {
       },
       {
         vehicleId: mazDump.id,
+        repairTemplateId: dumpTruckHydraulics.id,
         type: 'maintenance',
         status: 'in_progress',
-        title: 'ТО с ревизией гидролинии',
-        dueAt: new Date('2026-04-09T09:00:00.000Z'),
+        title: dumpTruckHydraulics.name,
+        startDate: new Date('2026-06-07T00:00:00.000Z'),
+        endDate: new Date('2026-06-09T00:00:00.000Z'),
+        durationDays: dumpTruckHydraulics.durationDays,
+        dueAt: new Date('2026-06-09T00:00:00.000Z'),
         mileageKm: 127000,
         notes: 'Работы выполняются в ремонтной зоне №2.',
       },
@@ -627,6 +782,9 @@ async function main() {
         type: 'inspection',
         status: 'completed',
         title: 'Сезонный осмотр',
+        startDate: new Date('2026-03-24T00:00:00.000Z'),
+        endDate: new Date('2026-03-24T00:00:00.000Z'),
+        durationDays: 1,
         dueAt: new Date('2026-03-24T08:00:00.000Z'),
         completedAt: new Date('2026-03-24T09:20:00.000Z'),
         mileageKm: 124980,
@@ -637,24 +795,35 @@ async function main() {
         type: 'insurance',
         status: 'scheduled',
         title: 'Продление полиса ОСАГО',
-        dueAt: new Date('2026-04-29T00:00:00.000Z'),
+        startDate: new Date('2026-06-29T00:00:00.000Z'),
+        endDate: new Date('2026-06-29T00:00:00.000Z'),
+        durationDays: 1,
+        dueAt: new Date('2026-06-29T00:00:00.000Z'),
         notes: 'Документы подготовлены, ожидается подтверждение от страховой.',
       },
       {
         vehicleId: mazCrane.id,
+        repairTemplateId: craneHydraulics.id,
         type: 'inspection',
         status: 'completed',
         title: 'Проверка грузоподъёмного оборудования',
+        startDate: new Date('2026-03-30T00:00:00.000Z'),
+        endDate: new Date('2026-03-30T00:00:00.000Z'),
+        durationDays: 1,
         dueAt: new Date('2026-03-30T11:00:00.000Z'),
         completedAt: new Date('2026-03-30T12:10:00.000Z'),
         notes: 'Разрешён к работе на объекте без ограничений.',
       },
       {
         vehicleId: jcbExcavator.id,
+        repairTemplateId: excavatorHydraulics.id,
         type: 'repair',
         status: 'overdue',
-        title: 'Ремонт гидроцилиндра стрелы',
-        dueAt: new Date('2026-04-05T07:30:00.000Z'),
+        title: excavatorHydraulics.name,
+        startDate: new Date('2026-06-03T00:00:00.000Z'),
+        endDate: new Date('2026-06-07T00:00:00.000Z'),
+        durationDays: excavatorHydraulics.durationDays,
+        dueAt: new Date('2026-06-07T00:00:00.000Z'),
         mileageKm: 158500,
         notes: 'Требуется поставка ремкомплекта, техника простаивает.',
       },
@@ -663,14 +832,21 @@ async function main() {
         type: 'diagnostics',
         status: 'scheduled',
         title: 'Продление диагностической карты',
-        dueAt: new Date('2026-04-11T00:00:00.000Z'),
+        startDate: new Date('2026-06-11T00:00:00.000Z'),
+        endDate: new Date('2026-06-11T00:00:00.000Z'),
+        durationDays: 1,
+        dueAt: new Date('2026-06-11T00:00:00.000Z'),
         notes: 'Нужно завершить ремонт до подачи на диагностику.',
       },
       {
         vehicleId: gazVan.id,
+        repairTemplateId: vanScheduledService.id,
         type: 'inspection',
         status: 'completed',
         title: 'Подготовка в резерв',
+        startDate: new Date('2026-03-27T00:00:00.000Z'),
+        endDate: new Date('2026-03-27T00:00:00.000Z'),
+        durationDays: 1,
         dueAt: new Date('2026-03-27T09:30:00.000Z'),
         completedAt: new Date('2026-03-27T10:00:00.000Z'),
         mileageKm: 19040,
@@ -678,10 +854,14 @@ async function main() {
       },
       {
         vehicleId: hyundaiTucson.id,
+        repairTemplateId: passengerCarBrakes.id,
         type: 'maintenance',
         status: 'scheduled',
-        title: 'Замена колодок и масла',
-        dueAt: new Date('2026-05-06T08:00:00.000Z'),
+        title: passengerCarBrakes.name,
+        startDate: new Date('2026-06-10T00:00:00.000Z'),
+        endDate: new Date('2026-06-11T00:00:00.000Z'),
+        durationDays: passengerCarBrakes.durationDays,
+        dueAt: new Date('2026-06-11T00:00:00.000Z'),
         mileageKm: 60000,
         notes: 'Запланировано на окно после завершения выездов по объекту.',
       },
@@ -690,6 +870,9 @@ async function main() {
         type: 'inspection',
         status: 'completed',
         title: 'Еженедельный осмотр',
+        startDate: new Date('2026-04-02T00:00:00.000Z'),
+        endDate: new Date('2026-04-02T00:00:00.000Z'),
+        durationDays: 1,
         dueAt: new Date('2026-04-02T07:00:00.000Z'),
         completedAt: new Date('2026-04-02T07:20:00.000Z'),
         mileageKm: 55980,
