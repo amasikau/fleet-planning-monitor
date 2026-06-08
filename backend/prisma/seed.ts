@@ -1975,7 +1975,7 @@ async function main() {
       { stage: potholePreparationStage, startOffsetDays: 0 },
       { stage: potholeDeliveryStage, startOffsetDays: 0 },
       { stage: compactionStage, startOffsetDays: 1 },
-      { stage: qualityControlStage, startOffsetDays: 2 },
+      { stage: qualityControlStage, startOffsetDays: 4 },
     ],
   );
 

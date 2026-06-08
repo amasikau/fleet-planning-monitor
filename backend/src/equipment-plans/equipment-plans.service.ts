@@ -345,7 +345,11 @@ export class EquipmentPlansService {
     return value.toISOString().slice(0, 10);
   }
 
-  private planSlotKey(vehicleId: string, workDate: Date, shift: EquipmentPlanShift) {
+  private planSlotKey(
+    vehicleId: string,
+    workDate: Date,
+    shift: EquipmentPlanShift,
+  ) {
     return `${vehicleId}:${this.dateKey(workDate)}:${shift}`;
   }
 
@@ -356,7 +360,11 @@ export class EquipmentPlansService {
     'diagnostics',
   ] as const;
 
-  private serviceBlockSlotKeys(vehicleId: string, startDate: Date, endDate: Date) {
+  private serviceBlockSlotKeys(
+    vehicleId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
     return this.daysBetweenInclusive(startDate, endDate).flatMap((date) => [
       this.planSlotKey(vehicleId, date, 'day'),
       this.planSlotKey(vehicleId, date, 'night'),
@@ -378,12 +386,15 @@ export class EquipmentPlansService {
     };
   }
 
-  private serviceOverlapsDate(event: {
-    startDate: Date | null;
-    endDate: Date | null;
-    dueAt: Date | null;
-    createdAt?: Date;
-  }, date: Date) {
+  private serviceOverlapsDate(
+    event: {
+      startDate: Date | null;
+      endDate: Date | null;
+      dueAt: Date | null;
+      createdAt?: Date;
+    },
+    date: Date,
+  ) {
     const range = this.getServiceDateRange(event);
     if (!range) return false;
     const normalizedDate = this.normalizeDate(date.toISOString());
@@ -416,7 +427,9 @@ export class EquipmentPlansService {
 
   private assertDateRange(startDate: Date, endDate: Date) {
     if (endDate < startDate) {
-      throw new ConflictException('Дата окончания этапа не может быть раньше даты начала');
+      throw new ConflictException(
+        'Дата окончания этапа не может быть раньше даты начала',
+      );
     }
   }
 
@@ -562,7 +575,9 @@ export class EquipmentPlansService {
     const existingIds = new Set(existing.map((stage) => stage.id));
     const missing = requestedIds.filter((id) => !existingIds.has(id));
     if (missing.length > 0) {
-      throw new NotFoundException('Один или несколько этапов из справочника не найдены');
+      throw new NotFoundException(
+        'Один или несколько этапов из справочника не найдены',
+      );
     }
 
     return requestedIds;
@@ -602,15 +617,29 @@ export class EquipmentPlansService {
     dto: GenerateEquipmentPlanDraftDto,
   ): EquipmentPlanDraftStageDto[] {
     if (dto.stages?.length) {
+      let nextDefaultOffsetDays = 0;
       return dto.stages
         .map((stage, index) => ({
           ...stage,
           sequence: stage.sequence ?? index + 1,
-          startOffsetDays: stage.startOffsetDays ?? index,
           durationDays: stage.durationDays || 1,
           equipmentRules: stage.equipmentRules ?? [],
         }))
-        .sort((a, b) => a.sequence - b.sequence);
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((stage) => {
+          const startOffsetDays =
+            stage.startOffsetDays ?? nextDefaultOffsetDays;
+          const durationDays = Math.max(stage.durationDays || 1, 1);
+          nextDefaultOffsetDays = Math.max(
+            nextDefaultOffsetDays,
+            startOffsetDays + durationDays,
+          );
+          return {
+            ...stage,
+            startOffsetDays,
+            durationDays,
+          };
+        });
     }
 
     return template.stageTemplates.map((link) => ({
@@ -636,6 +665,72 @@ export class EquipmentPlansService {
     }));
   }
 
+  private isPhysicalPlanningStage(stage: EquipmentPlanDraftStageDto) {
+    return (
+      stage.type !== 'traffic_control' &&
+      stage.type !== 'quality_control' &&
+      stage.type !== 'maintenance'
+    );
+  }
+
+  private isPreparatoryPlanningStage(stage: EquipmentPlanDraftStageDto) {
+    return (
+      stage.type === 'survey' ||
+      stage.type === 'preparation' ||
+      stage.type === 'tack_coat'
+    );
+  }
+
+  private normalizeTechnologicalStageOffsets(
+    stages: EquipmentPlanDraftStageDto[],
+  ): EquipmentPlanDraftStageDto[] {
+    let latestPhysicalEndOffset = -1;
+
+    return stages
+      .map((stage) => ({
+        ...stage,
+        startOffsetDays: Math.max(stage.startOffsetDays ?? 0, 0),
+        durationDays: Math.max(stage.durationDays || 1, 1),
+      }))
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((stage) => {
+        let startOffsetDays = stage.startOffsetDays ?? 0;
+        const isPhysical = this.isPhysicalPlanningStage(stage);
+
+        if (stage.type === 'quality_control') {
+          startOffsetDays = Math.max(
+            startOffsetDays,
+            latestPhysicalEndOffset + 1,
+          );
+        } else if (
+          isPhysical &&
+          !stage.canOverlap &&
+          !this.isPreparatoryPlanningStage(stage) &&
+          stage.startOffsetDays > 0 &&
+          latestPhysicalEndOffset >= 0
+        ) {
+          startOffsetDays = Math.max(
+            startOffsetDays,
+            latestPhysicalEndOffset + 1,
+          );
+        }
+
+        const endOffsetDays = startOffsetDays + stage.durationDays - 1;
+
+        if (isPhysical) {
+          latestPhysicalEndOffset = Math.max(
+            latestPhysicalEndOffset,
+            endOffsetDays,
+          );
+        }
+
+        return {
+          ...stage,
+          startOffsetDays,
+        };
+      });
+  }
+
   private calculateRequiredCount(
     rule: EquipmentPlanDraftRuleDto,
     params: {
@@ -650,7 +745,8 @@ export class EquipmentPlansService {
     const minCount = rule.minCount ?? 1;
     const maxCount = rule.maxCount ?? null;
     let calculated = baseCount;
-    let calculationNote = 'Фиксированное механизированное звено по технологической карте.';
+    let calculationNote =
+      'Фиксированное механизированное звено по технологической карте.';
 
     if (calculationKind === 'per_km') {
       calculated = baseCount + (rule.countPerKm ?? 0) * params.lengthKm;
@@ -668,7 +764,10 @@ export class EquipmentPlansService {
           ? (params.haulDistanceKm * 2 * 60) / averageSpeedKmh
           : 0;
       const cycleMinutes =
-        loadingMinutes + unloadingMinutes + waitingReserveMinutes + travelMinutes;
+        loadingMinutes +
+        unloadingMinutes +
+        waitingReserveMinutes +
+        travelMinutes;
       calculated = Math.ceil((cycleMinutes / truckIntervalMinutes) * 1.15);
       calculationNote =
         `Самосвалы рассчитаны по циклу доставки: ${Math.round(cycleMinutes)} мин оборот, ` +
@@ -768,7 +867,10 @@ export class EquipmentPlansService {
     if (isPast && plan.status !== 'completed' && plan.actualHours == null) {
       warnings.push('Не заполнены фактические часы после даты работ');
     }
-    if (plan.vehicle.status === 'maintenance' || plan.vehicle.status === 'repair') {
+    if (
+      plan.vehicle.status === 'maintenance' ||
+      plan.vehicle.status === 'repair'
+    ) {
       warnings.push('Техника находится в ремонте или на ТО');
     }
     if (plan.demand && plan.vehicle.type !== plan.demand.vehicleType) {
@@ -807,7 +909,9 @@ export class EquipmentPlansService {
     });
     if (!site) throw new NotFoundException('Дорожный объект не найден');
     if (site.isCompleted) {
-      throw new ConflictException('Нельзя планировать технику на завершённый объект');
+      throw new ConflictException(
+        'Нельзя планировать технику на завершённый объект',
+      );
     }
     return site;
   }
@@ -818,7 +922,9 @@ export class EquipmentPlansService {
     });
     if (!vehicle) throw new NotFoundException('Техника не найдена');
     if (vehicle.status === 'maintenance' || vehicle.status === 'repair') {
-      throw new ConflictException('Техника в ремонте или на ТО недоступна для планирования');
+      throw new ConflictException(
+        'Техника в ремонте или на ТО недоступна для планирования',
+      );
     }
     if (workDate) {
       const blockingService = await this.prisma.fleetServiceEvent.findFirst({
@@ -848,7 +954,9 @@ export class EquipmentPlansService {
     });
     if (!stage) throw new NotFoundException('Этап дорожных работ не найден');
     if (stage.siteId !== siteId) {
-      throw new ConflictException('Этап должен относиться к выбранному дорожному объекту');
+      throw new ConflictException(
+        'Этап должен относиться к выбранному дорожному объекту',
+      );
     }
     return stage;
   }
@@ -862,15 +970,22 @@ export class EquipmentPlansService {
     const demand = await this.prisma.equipmentDemand.findUnique({
       where: { id: demandId },
     });
-    if (!demand) throw new NotFoundException('Потребность в технике не найдена');
+    if (!demand)
+      throw new NotFoundException('Потребность в технике не найдена');
     if (demand.siteId !== siteId) {
-      throw new ConflictException('Потребность должна относиться к выбранному дорожному объекту');
+      throw new ConflictException(
+        'Потребность должна относиться к выбранному дорожному объекту',
+      );
     }
     if (stageId && demand.stageId && demand.stageId !== stageId) {
-      throw new ConflictException('Потребность должна относиться к выбранному этапу работ');
+      throw new ConflictException(
+        'Потребность должна относиться к выбранному этапу работ',
+      );
     }
     if (demand.vehicleType !== vehicleType) {
-      throw new ConflictException('Тип выбранной техники не соответствует потребности');
+      throw new ConflictException(
+        'Тип выбранной техники не соответствует потребности',
+      );
     }
     return demand;
   }
@@ -1079,7 +1194,9 @@ export class EquipmentPlansService {
       this.assertSite(dto.siteId),
       this.findWorkTypeOrThrow(dto.workTypeId),
     ]);
-    const draftStages = this.normalizeDraftStages(template, dto);
+    const draftStages = this.normalizeTechnologicalStageOffsets(
+      this.normalizeDraftStages(template, dto),
+    );
     const startDate = this.normalizeDate(dto.startDate);
     const maxEndDate = draftStages.reduce((latest, stage) => {
       const stageEnd = this.addDays(
@@ -1137,6 +1254,7 @@ export class EquipmentPlansService {
     const getOccupiedVehicleIds = (
       vehicleType: FleetVehicleType,
       stageDateKeys: Set<string>,
+      draftOccupiedSlotKeys = new Set<string>(),
     ) => {
       const occupiedByPlans = existingPlans
         .filter(
@@ -1150,12 +1268,30 @@ export class EquipmentPlansService {
           (event) =>
             event.vehicle.type === vehicleType &&
             [...stageDateKeys].some((dateKey) =>
-              this.serviceOverlapsDate(event, new Date(`${dateKey}T00:00:00.000Z`)),
+              this.serviceOverlapsDate(
+                event,
+                new Date(`${dateKey}T00:00:00.000Z`),
+              ),
             ),
         )
         .map((event) => event.vehicleId);
+      const occupiedByDraft = vehicles
+        .filter(
+          (vehicle) =>
+            vehicle.type === vehicleType &&
+            [...stageDateKeys].some((dateKey) =>
+              draftOccupiedSlotKeys.has(`${vehicle.id}:${dateKey}:day`),
+            ),
+        )
+        .map((vehicle) => vehicle.id);
 
-      return [...new Set([...occupiedByPlans, ...occupiedByService])];
+      return [
+        ...new Set([
+          ...occupiedByPlans,
+          ...occupiedByService,
+          ...occupiedByDraft,
+        ]),
+      ];
     };
 
     const getServiceBlockedVehicleIds = (
@@ -1196,8 +1332,10 @@ export class EquipmentPlansService {
     const canCoverStage = (
       stage: EquipmentPlanDraftStageDto,
       stageStart: Date,
+      draftOccupiedSlotKeys: Set<string>,
     ) => {
       const stageDateKeys = getStageDateKeys(stageStart, stage.durationDays);
+      const candidateOccupiedSlotKeys = new Set(draftOccupiedSlotKeys);
 
       return stage.equipmentRules.every((rule) => {
         const { requiredCount } = this.calculateRequiredCount(rule, {
@@ -1209,15 +1347,38 @@ export class EquipmentPlansService {
         const occupiedVehicleIds = getOccupiedVehicleIds(
           rule.vehicleType,
           stageDateKeys,
+          candidateOccupiedSlotKeys,
         );
-        return (
-          getAvailableVehicles(rule.vehicleType, occupiedVehicleIds).length >=
-          requiredCount
+        const selectedVehicles = getAvailableVehicles(
+          rule.vehicleType,
+          occupiedVehicleIds,
+        ).slice(0, requiredCount);
+
+        if (selectedVehicles.length < requiredCount) return false;
+
+        selectedVehicles.forEach((vehicle) => {
+          stageDateKeys.forEach((dateKey) =>
+            candidateOccupiedSlotKeys.add(`${vehicle.id}:${dateKey}:day`),
+          );
+        });
+        return true;
+      });
+    };
+
+    const reserveDraftVehicles = (
+      stageDateKeys: Set<string>,
+      vehiclesToReserve: DraftVehicleRecord[],
+      draftOccupiedSlotKeys: Set<string>,
+    ) => {
+      vehiclesToReserve.forEach((vehicle) => {
+        stageDateKeys.forEach((dateKey) =>
+          draftOccupiedSlotKeys.add(`${vehicle.id}:${dateKey}:day`),
         );
       });
     };
 
     let accumulatedAutoDelayDays = 0;
+    const draftOccupiedSlotKeys = new Set<string>();
 
     const stages: EquipmentPlanDraftStageView[] = draftStages.map((stage) => {
       const originalOffsetDays = stage.startOffsetDays ?? 0;
@@ -1236,7 +1397,7 @@ export class EquipmentPlansService {
             originalOffsetDays + delayDays,
           );
 
-          if (canCoverStage(stage, candidateStart)) {
+          if (canCoverStage(stage, candidateStart, draftOccupiedSlotKeys)) {
             accumulatedAutoDelayDays = delayDays;
             effectiveOffsetDays = originalOffsetDays + delayDays;
             break;
@@ -1247,6 +1408,7 @@ export class EquipmentPlansService {
       const stageStart = this.addDays(startDate, effectiveOffsetDays);
       const stageEnd = this.addDays(stageStart, stage.durationDays - 1);
       const stageDateKeys = getStageDateKeys(stageStart, stage.durationDays);
+      const stageOccupiedSlotKeys = new Set(draftOccupiedSlotKeys);
 
       const demands: EquipmentPlanDraftDemandView[] = stage.equipmentRules.map(
         (rule) => {
@@ -1266,6 +1428,7 @@ export class EquipmentPlansService {
           const occupiedVehicleIds = getOccupiedVehicleIds(
             rule.vehicleType,
             stageDateKeys,
+            stageOccupiedSlotKeys,
           );
           const serviceBlockedVehicleIds = getServiceBlockedVehicleIds(
             rule.vehicleType,
@@ -1283,11 +1446,18 @@ export class EquipmentPlansService {
             ...serviceBlockedVehicleIds,
           ]);
           const conflictCount = occupiedVehicleIds.length;
-          const availableVehicles = getAvailableVehicles(
+          const availableDraftVehicles = getAvailableVehicles(
             rule.vehicleType,
             occupiedVehicleIds,
-          )
-            .map((vehicle) => this.formatDraftVehicle(vehicle));
+          );
+          reserveDraftVehicles(
+            stageDateKeys,
+            availableDraftVehicles.slice(0, requiredCount),
+            stageOccupiedSlotKeys,
+          );
+          const availableVehicles = availableDraftVehicles.map((vehicle) =>
+            this.formatDraftVehicle(vehicle),
+          );
 
           const { risks, riskLevel } = this.buildDraftRisk({
             requiredCount,
@@ -1315,6 +1485,8 @@ export class EquipmentPlansService {
           };
         },
       );
+
+      stageOccupiedSlotKeys.forEach((key) => draftOccupiedSlotKeys.add(key));
 
       return {
         templateStageId: stage.templateStageId ?? null,
@@ -1358,8 +1530,7 @@ export class EquipmentPlansService {
       return (
         sum +
         stage.demands.reduce(
-          (demandSum, demand) =>
-            demandSum + demand.requiredCount * stageDays,
+          (demandSum, demand) => demandSum + demand.requiredCount * stageDays,
           0,
         )
       );
@@ -1395,7 +1566,7 @@ export class EquipmentPlansService {
     const selectedAssignments = new Map<string, string[]>(
       (dto.selectedAssignments ?? []).map((item) => [
         `${item.stageSequence}:${item.vehicleType}`,
-        item.vehicleIds,
+        [...new Set(item.vehicleIds)],
       ]),
     );
     let createdDemands = 0;
@@ -1404,10 +1575,7 @@ export class EquipmentPlansService {
 
     const eligibleVehicles = await this.prisma.fleetVehicle.findMany({
       where: { status: { in: ['active', 'reserve'] } },
-      orderBy: [
-        { status: 'asc' },
-        { plateNumber: 'asc' },
-      ],
+      orderBy: [{ status: 'asc' }, { plateNumber: 'asc' }],
       select: {
         id: true,
         type: true,
@@ -1524,6 +1692,12 @@ export class EquipmentPlansService {
                   });
 
             if (selectedVehicleIds?.length) {
+              if (selectedVehicleIds.length < demand.requiredCount) {
+                throw new ConflictException(
+                  'Выбрано меньше единиц техники, чем требуется по расчёту этапа.',
+                );
+              }
+
               const missingSelected = selectedVehicleIds.filter(
                 (id) => !sourceVehicles.some((vehicle) => vehicle.id === id),
               );
@@ -1622,35 +1796,29 @@ export class EquipmentPlansService {
   }
 
   async getStats(): Promise<EquipmentPlanStatsView> {
-    const [
-      planned,
-      inProgress,
-      completed,
-      failed,
-      missingActual,
-      coverage,
-    ] = await Promise.all([
-      this.prisma.equipmentPlanAssignment.count({
-        where: { status: 'planned' },
-      }),
-      this.prisma.equipmentPlanAssignment.count({
-        where: { status: 'in_progress' },
-      }),
-      this.prisma.equipmentPlanAssignment.count({
-        where: { status: 'completed' },
-      }),
-      this.prisma.equipmentPlanAssignment.count({
-        where: { status: 'failed' },
-      }),
-      this.prisma.equipmentPlanAssignment.count({
-        where: {
-          workDate: { lt: new Date() },
-          actualHours: null,
-          status: { not: 'completed' },
-        },
-      }),
-      this.getCoverage({}),
-    ]);
+    const [planned, inProgress, completed, failed, missingActual, coverage] =
+      await Promise.all([
+        this.prisma.equipmentPlanAssignment.count({
+          where: { status: 'planned' },
+        }),
+        this.prisma.equipmentPlanAssignment.count({
+          where: { status: 'in_progress' },
+        }),
+        this.prisma.equipmentPlanAssignment.count({
+          where: { status: 'completed' },
+        }),
+        this.prisma.equipmentPlanAssignment.count({
+          where: { status: 'failed' },
+        }),
+        this.prisma.equipmentPlanAssignment.count({
+          where: {
+            workDate: { lt: new Date() },
+            actualHours: null,
+            status: { not: 'completed' },
+          },
+        }),
+        this.getCoverage({}),
+      ]);
 
     const deficitDemands = coverage.filter((item) => item.deficit > 0).length;
     const criticalDeficits = coverage.filter(
@@ -1801,7 +1969,8 @@ export class EquipmentPlansService {
     const existing = await this.prisma.equipmentDemand.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Потребность в технике не найдена');
+    if (!existing)
+      throw new NotFoundException('Потребность в технике не найдена');
 
     const siteId = dto.siteId ?? existing.siteId;
     if (dto.siteId) await this.assertSite(siteId);
@@ -1833,13 +2002,16 @@ export class EquipmentPlansService {
     const existing = await this.prisma.equipmentDemand.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Потребность в технике не найдена');
+    if (!existing)
+      throw new NotFoundException('Потребность в технике не найдена');
 
     await this.prisma.equipmentDemand.delete({ where: { id } });
     return { success: true };
   }
 
-  async getCoverage(query: { siteId?: string }): Promise<EquipmentCoverageView[]> {
+  async getCoverage(query: {
+    siteId?: string;
+  }): Promise<EquipmentCoverageView[]> {
     const [demands, plans, availableByType] = await Promise.all([
       this.prisma.equipmentDemand.findMany({
         where: query.siteId ? { siteId: query.siteId } : undefined,
@@ -1876,7 +2048,10 @@ export class EquipmentPlansService {
     return demands.map((demand) => {
       const matchingPlans = plans.filter((plan) => {
         if (plan.status === 'failed') return false;
-        if (plan.vehicle.status === 'maintenance' || plan.vehicle.status === 'repair') {
+        if (
+          plan.vehicle.status === 'maintenance' ||
+          plan.vehicle.status === 'repair'
+        ) {
           return false;
         }
         if (plan.vehicle.type !== demand.vehicleType) return false;
@@ -1901,7 +2076,11 @@ export class EquipmentPlansService {
       );
       const availableCount = availableMap.get(demand.vehicleType) ?? 0;
       const riskLevel: EquipmentCoverageView['riskLevel'] =
-        deficit === 0 ? 'low' : demand.priority === 'critical' ? 'high' : 'medium';
+        deficit === 0
+          ? 'low'
+          : demand.priority === 'critical'
+            ? 'high'
+            : 'medium';
       const recommendation = this.buildCoverageRecommendation({
         deficit,
         priority: demand.priority,
@@ -2020,7 +2199,8 @@ export class EquipmentPlansService {
     const existing = await this.prisma.equipmentPlanAssignment.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Запись план-графика не найдена');
+    if (!existing)
+      throw new NotFoundException('Запись план-графика не найдена');
 
     const siteId = dto.siteId ?? existing.siteId;
     const vehicleId = dto.vehicleId ?? existing.vehicleId;
@@ -2067,7 +2247,8 @@ export class EquipmentPlansService {
         data: {
           siteId: dto.siteId,
           stageId:
-            dto.stageId !== undefined || (demandId && stageId !== existing.stageId)
+            dto.stageId !== undefined ||
+            (demandId && stageId !== existing.stageId)
               ? stageId
               : undefined,
           demandId: dto.demandId !== undefined ? demandId : undefined,
@@ -2099,7 +2280,8 @@ export class EquipmentPlansService {
     const existing = await this.prisma.equipmentPlanAssignment.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Запись план-графика не найдена');
+    if (!existing)
+      throw new NotFoundException('Запись план-графика не найдена');
 
     await this.prisma.equipmentPlanAssignment.delete({ where: { id } });
     return { success: true };
