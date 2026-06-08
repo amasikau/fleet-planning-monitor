@@ -49,9 +49,6 @@ import {
   Wrench01Icon,
   PencilEdit02Icon,
   Delete02Icon,
-  PlusSignCircleIcon,
-  Cancel01Icon,
-  Calendar03Icon,
   CheckmarkBadge01Icon,
   SearchIcon,
 } from "@hugeicons/core-free-icons"
@@ -137,6 +134,7 @@ export function ServiceEventDialog({
     createInitialForm(event, vehicles)
   )
   const [showDirectory, setShowDirectory] = useState(false)
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false)
   const [templateSearch, setTemplateSearch] = useState("")
 
   const selectedVehicle = vehicles.find(
@@ -189,19 +187,22 @@ export function ServiceEventDialog({
     setTemplateSearch("")
   }
 
-  const buildCleanForm = (patch?: Partial<ServiceEventFormValues>) => ({
-    ...form,
-    ...patch,
-    title: form.title.trim(),
-    dueAt: calculatedEndDate,
-    defectDescription: form.defectDescription.trim(),
-    notes: form.notes.trim(),
-    workLogs: form.workLogs.map((log) => ({
-      ...log,
-      title: log.title.trim(),
-      description: log.description.trim(),
-    })),
-  })
+  const buildCleanForm = (patch?: Partial<ServiceEventFormValues>) => {
+    const merged = { ...form, ...patch }
+
+    return {
+      ...merged,
+      title: merged.title.trim(),
+      dueAt: patch?.dueAt ?? calculatedEndDate,
+      defectDescription: merged.defectDescription.trim(),
+      notes: merged.notes.trim(),
+      workLogs: merged.workLogs.map((log) => ({
+        ...log,
+        title: log.title.trim(),
+        description: log.description.trim(),
+      })),
+    }
+  }
 
   const handleSave = () => {
     if (!form.vehicleId) {
@@ -209,7 +210,7 @@ export function ServiceEventDialog({
       return
     }
     if (!form.title.trim()) {
-      toast.error("Укажите название ремонта")
+      toast.error("Укажите название заявки")
       return
     }
     if (!form.startDate) {
@@ -220,69 +221,43 @@ export function ServiceEventDialog({
       toast.error("Укажите срок ремонта не меньше 1 дня")
       return
     }
-    if (form.workLogs.some((log) => !log.performedAt || !log.title.trim())) {
-      toast.error("У каждой выполненной работы должны быть дата и название")
-      return
-    }
     onSave(buildCleanForm())
   }
 
-  const updateWorkLog = (
-    index: number,
-    patch: Partial<ServiceEventFormValues["workLogs"][number]>
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      workLogs: prev.workLogs.map((log, i) =>
-        i === index ? { ...log, ...patch } : log
-      ),
-    }))
-  }
+  const getTodayIso = () => new Date().toISOString().slice(0, 10)
 
-  const addWorkLog = () => {
-    setForm((prev) => ({
-      ...prev,
-      workLogs: [
-        {
-          performedAt: new Date().toISOString().slice(0, 10),
-          title: "",
-          description: "",
-          mileageKm: null,
-        },
-        ...prev.workLogs,
-      ],
-    }))
+  const getInclusiveDays = (startDate: string, endDate: string) => {
+    const start = new Date(`${startDate}T00:00:00.000Z`)
+    const end = new Date(`${endDate}T00:00:00.000Z`)
+    const diff = end.getTime() - start.getTime()
+    return Math.max(Math.floor(diff / 86_400_000) + 1, 1)
   }
-
-  const removeWorkLog = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      workLogs: prev.workLogs.filter((_, i) => i !== index),
-    }))
-  }
-
-  const hasInvalidWorkLogs = () =>
-    form.workLogs.some((log) => !log.performedAt || !log.title.trim())
 
   const saveAsCompleted = () => {
     if (!form.title.trim()) {
-      toast.error("Укажите название ремонта")
+      toast.error("Укажите название заявки")
       return
     }
     if (!Number.isFinite(form.durationDays) || form.durationDays < 1) {
       toast.error("Укажите срок ремонта не меньше 1 дня")
       return
     }
-    if (hasInvalidWorkLogs()) {
-      toast.error("У каждой выполненной работы должны быть дата и название")
-      return
-    }
+    const completedAt = getTodayIso()
+    const startDate =
+      form.startDate && form.startDate <= completedAt
+        ? form.startDate
+        : completedAt
+
     onSave(
       buildCleanForm({
         status: "completed",
-        completedAt: new Date().toISOString().slice(0, 10),
+        completedAt,
+        startDate,
+        durationDays: getInclusiveDays(startDate, completedAt),
+        dueAt: completedAt,
       })
     )
+    setShowCompleteConfirm(false)
   }
 
   return (
@@ -310,7 +285,7 @@ export function ServiceEventDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               {isEdit && (
                 <div className="rounded-lg border bg-muted/30 p-3 sm:col-span-2">
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Техника</p>
                       <p className="mt-1 text-sm font-medium">
@@ -321,14 +296,6 @@ export function ServiceEventDialog({
                       <p className="text-xs text-muted-foreground">Создал</p>
                       <p className="mt-1 text-sm font-medium">
                         {event.reporter?.fullName ?? "Не указан"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        Работ в журнале
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums">
-                        {form.workLogs.length}
                       </p>
                     </div>
                   </div>
@@ -429,7 +396,7 @@ export function ServiceEventDialog({
               <div className="sm:col-span-2">
                 <div className="mb-1 flex items-center gap-2">
                   <label className="mr-auto block text-xs font-medium text-muted-foreground">
-                    Название ремонта
+                    Название заявки
                   </label>
                   <Button
                     type="button"
@@ -456,7 +423,7 @@ export function ServiceEventDialog({
                       title: event.target.value,
                     }))
                   }
-                  placeholder="Например, ремонт гидроцилиндра отвала"
+                  placeholder="Например, внеплановая диагностика гидросистемы"
                   className="h-9"
                 />
                 {selectedVehicle && availableTemplates.length === 0 && (
@@ -540,28 +507,6 @@ export function ServiceEventDialog({
                 </div>
               )}
 
-              {isEdit && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Пробег (км)
-                  </label>
-                  <Input
-                    type="number"
-                    value={form.mileageKm ?? ""}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        mileageKm: event.target.value
-                          ? parseInt(event.target.value)
-                          : null,
-                      }))
-                    }
-                    placeholder="—"
-                    className="h-9"
-                  />
-                </div>
-              )}
-
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   Описание
@@ -592,132 +537,6 @@ export function ServiceEventDialog({
                   className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />
               </div>
-
-              {isEdit && (
-                <div className="sm:col-span-2">
-                  <div className="mb-2 flex items-center gap-2">
-                    <HugeiconsIcon
-                      icon={Wrench01Icon}
-                      strokeWidth={2}
-                      className="size-4 text-muted-foreground"
-                    />
-                    <label className="mr-auto text-sm font-medium">
-                      Выполненные работы
-                    </label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={addWorkLog}
-                    >
-                      <HugeiconsIcon
-                        icon={PlusSignCircleIcon}
-                        strokeWidth={2}
-                        className="mr-1.5 size-4"
-                      />
-                      Добавить
-                    </Button>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {form.workLogs.length === 0 ? (
-                      <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                        Работы пока не добавлены
-                      </div>
-                    ) : (
-                      form.workLogs.map((log, index) => (
-                        <div
-                          key={index}
-                          className="rounded-lg border bg-card p-3"
-                        >
-                          <div className="grid gap-2 sm:grid-cols-[150px_1fr_110px_32px]">
-                            <div>
-                              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                                Дата
-                              </label>
-                              <div className="relative">
-                                <HugeiconsIcon
-                                  icon={Calendar03Icon}
-                                  strokeWidth={2}
-                                  className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-                                />
-                                <Input
-                                  type="date"
-                                  value={log.performedAt}
-                                  onChange={(event) =>
-                                    updateWorkLog(index, {
-                                      performedAt: event.target.value,
-                                    })
-                                  }
-                                  className="h-8 pl-8"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                                Работа
-                              </label>
-                              <Input
-                                value={log.title}
-                                onChange={(event) =>
-                                  updateWorkLog(index, {
-                                    title: event.target.value,
-                                  })
-                                }
-                                placeholder="Замена масла, диагностика..."
-                                className="h-8"
-                              />
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                                Пробег
-                              </label>
-                              <Input
-                                type="number"
-                                value={log.mileageKm ?? ""}
-                                onChange={(event) =>
-                                  updateWorkLog(index, {
-                                    mileageKm: event.target.value
-                                      ? parseInt(event.target.value)
-                                      : null,
-                                  })
-                                }
-                                placeholder="—"
-                                className="h-8"
-                              />
-                            </div>
-                            <div className="flex items-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => removeWorkLog(index)}
-                              >
-                                <HugeiconsIcon
-                                  icon={Cancel01Icon}
-                                  strokeWidth={2}
-                                  className="size-4"
-                                />
-                              </Button>
-                            </div>
-                          </div>
-                          <textarea
-                            value={log.description}
-                            onChange={(event) =>
-                              updateWorkLog(index, {
-                                description: event.target.value,
-                              })
-                            }
-                            placeholder="Детали работы, материалы, замечания"
-                            className="mt-2 min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          />
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -727,14 +546,14 @@ export function ServiceEventDialog({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={saveAsCompleted}
+                onClick={() => setShowCompleteConfirm(true)}
               >
                 <HugeiconsIcon
                   icon={CheckmarkBadge01Icon}
                   strokeWidth={2}
                   className="mr-1.5 size-4"
                 />
-                Завершить
+                Завершить досрочно
               </Button>
             )}
             <Button
@@ -750,6 +569,32 @@ export function ServiceEventDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showCompleteConfirm}
+        onOpenChange={setShowCompleteConfirm}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Завершить заявку досрочно?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Заявка будет переведена в статус «Завершено» текущей датой. Период
+              недоступности техники сократится до даты досрочного завершения.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <Button onClick={saveAsCompleted}>
+              <HugeiconsIcon
+                icon={CheckmarkBadge01Icon}
+                strokeWidth={2}
+                className="mr-1 size-4"
+              />
+              Завершить досрочно
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={showDirectory} onOpenChange={setShowDirectory}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">

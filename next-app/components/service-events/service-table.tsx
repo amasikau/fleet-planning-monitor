@@ -208,10 +208,10 @@ export function ServiceTable({
       dueAt: values.dueAt || undefined,
       status: values.status,
       completedAt: values.completedAt,
-      mileageKm: values.mileageKm,
+      mileageKm: undefined,
       defectDescription: values.defectDescription,
       notes: values.notes,
-      workLogs: editingEvent ? values.workLogs : undefined,
+      workLogs: undefined,
     }
   }
 
