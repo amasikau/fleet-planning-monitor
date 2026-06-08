@@ -10,7 +10,6 @@ import type {
 import { api } from "@/lib/api"
 import { ServiceStatsCards } from "@/components/service-events/service-stats"
 import { ServiceTable } from "@/components/service-events/service-table"
-import { RepairTemplateDirectory } from "@/components/service-events/repair-template-directory"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AlertCircleIcon } from "@hugeicons/core-free-icons"
@@ -74,7 +73,8 @@ export default function ServicePage() {
       <div className="px-4 lg:px-6">
         <h1 className="text-2xl font-bold">ТО и ремонты</h1>
         <p className="text-sm text-muted-foreground">
-          Контроль сервисных заявок, сроков обслуживания и влияния ремонтов на план-график
+          Контроль сервисных заявок, сроков обслуживания и влияния ремонтов на
+          план-график
         </p>
       </div>
 
@@ -95,12 +95,6 @@ export default function ServicePage() {
       )}
 
       <ServiceStatsCards stats={stats} />
-
-      <RepairTemplateDirectory
-        templates={repairTemplates}
-        canEdit={canEdit}
-        onDataChange={fetchData}
-      />
 
       <ServiceTable
         initialEvents={events}

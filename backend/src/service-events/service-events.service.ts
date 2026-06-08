@@ -176,7 +176,8 @@ export class ServiceEventsService {
     const template = await this.prisma.fleetRepairTemplate.findUnique({
       where: { id: templateId },
     });
-    if (!template) throw new NotFoundException('Ремонт из справочника не найден');
+    if (!template)
+      throw new NotFoundException('Ремонт из справочника не найден');
     if (!template.isActive) {
       throw new BadRequestException('Выбранный ремонт отключён в справочнике');
     }
@@ -349,12 +350,7 @@ export class ServiceEventsService {
 
     const templates = await this.prisma.fleetRepairTemplate.findMany({
       where,
-      orderBy: [
-        { vehicleType: 'asc' },
-        { sortOrder: 'asc' },
-        { category: 'asc' },
-        { name: 'asc' },
-      ],
+      orderBy: [{ vehicleType: 'asc' }, { category: 'asc' }, { name: 'asc' }],
     });
 
     return templates.map((template) => this.formatTemplate(template));
@@ -385,7 +381,8 @@ export class ServiceEventsService {
     const existing = await this.prisma.fleetRepairTemplate.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Ремонт из справочника не найден');
+    if (!existing)
+      throw new NotFoundException('Ремонт из справочника не найден');
 
     const template = await this.prisma.fleetRepairTemplate.update({
       where: { id },
@@ -407,7 +404,8 @@ export class ServiceEventsService {
     const existing = await this.prisma.fleetRepairTemplate.findUnique({
       where: { id },
     });
-    if (!existing) throw new NotFoundException('Ремонт из справочника не найден');
+    if (!existing)
+      throw new NotFoundException('Ремонт из справочника не найден');
 
     await this.prisma.fleetRepairTemplate.update({
       where: { id },
@@ -432,7 +430,9 @@ export class ServiceEventsService {
     );
     const title = dto.title?.trim() || template?.name || '';
     if (!title) {
-      throw new BadRequestException('Выберите ремонт из справочника или укажите название заявки');
+      throw new BadRequestException(
+        'Выберите ремонт из справочника или укажите название заявки',
+      );
     }
     const period = this.buildServicePeriod({
       startDate: dto.startDate,
@@ -497,7 +497,9 @@ export class ServiceEventsService {
         startDate: dto.startDate ?? existing.startDate,
         dueAt: dto.dueAt ?? existing.dueAt,
         durationDays:
-          nextTemplate?.durationDays ?? dto.durationDays ?? existing.durationDays,
+          nextTemplate?.durationDays ??
+          dto.durationDays ??
+          existing.durationDays,
       });
       updateData.startDate = period.startDate;
       updateData.endDate = period.endDate;

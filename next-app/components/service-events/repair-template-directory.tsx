@@ -55,7 +55,6 @@ type TemplateForm = {
   category: FleetRepairCategory
   name: string
   durationDays: number
-  sortOrder: number
   notes: string
   isActive: boolean
 }
@@ -70,7 +69,6 @@ function initialForm(template?: RepairTemplate | null): TemplateForm {
     category: template?.category ?? "scheduled_service",
     name: template?.name ?? "",
     durationDays: template?.durationDays ?? 1,
-    sortOrder: template?.sortOrder ?? 100,
     notes: template?.notes ?? "",
     isActive: template?.isActive ?? true,
   }
@@ -90,8 +88,9 @@ export function RepairTemplateDirectory({
     useState<FleetVehicleType | null>(null)
   const [categoryFilter, setCategoryFilter] =
     useState<FleetRepairCategory | null>(null)
-  const [editingTemplate, setEditingTemplate] =
-    useState<RepairTemplate | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<RepairTemplate | null>(
+    null
+  )
   const [showDialog, setShowDialog] = useState(false)
   const [form, setForm] = useState<TemplateForm>(() => initialForm())
 
@@ -118,7 +117,6 @@ export function RepairTemplateDirectory({
       .sort(
         (a, b) =>
           a.vehicleType.localeCompare(b.vehicleType) ||
-          a.sortOrder - b.sortOrder ||
           a.category.localeCompare(b.category) ||
           a.name.localeCompare(b.name, "ru")
       )
@@ -154,7 +152,10 @@ export function RepairTemplateDirectory({
 
     try {
       if (editingTemplate) {
-        await api.serviceEvents.updateRepairTemplate(editingTemplate.id, payload)
+        await api.serviceEvents.updateRepairTemplate(
+          editingTemplate.id,
+          payload
+        )
         toast.success("Позиция справочника обновлена")
       } else {
         await api.serviceEvents.createRepairTemplate(payload)
@@ -269,7 +270,6 @@ export function RepairTemplateDirectory({
                     <TableHead>Раздел</TableHead>
                     <TableHead>Ремонт</TableHead>
                     <TableHead>Дней</TableHead>
-                    <TableHead>Порядок</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
@@ -277,7 +277,7 @@ export function RepairTemplateDirectory({
                   {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={5}
                         className="h-20 text-center text-muted-foreground"
                       >
                         Позиции справочника не найдены
@@ -306,9 +306,6 @@ export function RepairTemplateDirectory({
                         </TableCell>
                         <TableCell className="tabular-nums">
                           {template.durationDays}
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {template.sortOrder}
                         </TableCell>
                         <TableCell>
                           {canEdit && (
@@ -357,7 +354,8 @@ export function RepairTemplateDirectory({
               {editingTemplate ? "Редактирование ремонта" : "Новый ремонт"}
             </DialogTitle>
             <DialogDescription>
-              Позиция справочника определяет доступные ремонты для выбранного типа техники.
+              Позиция справочника определяет доступные ремонты для выбранного
+              типа техники.
             </DialogDescription>
           </DialogHeader>
 
@@ -436,24 +434,10 @@ export function RepairTemplateDirectory({
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    durationDays: Math.max(parseInt(event.target.value) || 1, 1),
-                  }))
-                }
-                className="h-9"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Порядок сортировки
-              </label>
-              <Input
-                type="number"
-                min={0}
-                value={form.sortOrder}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    sortOrder: Math.max(parseInt(event.target.value) || 0, 0),
+                    durationDays: Math.max(
+                      parseInt(event.target.value) || 1,
+                      1
+                    ),
                   }))
                 }
                 className="h-9"

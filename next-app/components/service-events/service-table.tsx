@@ -194,21 +194,26 @@ export function ServiceTable({
     )
   }
 
-  const buildPayload = (values: ServiceEventFormValues) => ({
-    vehicleId: values.vehicleId,
-    repairTemplateId: values.repairTemplateId,
-    type: values.type,
-    title: values.title,
-    startDate: values.startDate,
-    durationDays: values.durationDays,
-    dueAt: values.dueAt || undefined,
-    status: values.status,
-    completedAt: values.completedAt,
-    mileageKm: values.mileageKm,
-    defectDescription: values.defectDescription,
-    notes: values.notes,
-    workLogs: editingEvent ? values.workLogs : undefined,
-  })
+  const buildPayload = (values: ServiceEventFormValues) => {
+    const repairTemplateId =
+      values.repairTemplateId || (editingEvent ? null : undefined)
+
+    return {
+      vehicleId: values.vehicleId,
+      repairTemplateId,
+      type: values.type,
+      title: values.title,
+      startDate: values.startDate,
+      durationDays: values.durationDays,
+      dueAt: values.dueAt || undefined,
+      status: values.status,
+      completedAt: values.completedAt,
+      mileageKm: values.mileageKm,
+      defectDescription: values.defectDescription,
+      notes: values.notes,
+      workLogs: editingEvent ? values.workLogs : undefined,
+    }
+  }
 
   const handleSave = async (values: ServiceEventFormValues) => {
     try {

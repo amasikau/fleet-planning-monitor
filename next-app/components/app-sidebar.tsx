@@ -16,7 +16,15 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { DashboardSquare01Icon, UserGroupIcon, CommandIcon, Car01Icon, Building06Icon, Settings02Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
+import {
+  DashboardSquare01Icon,
+  UserGroupIcon,
+  CommandIcon,
+  Car01Icon,
+  Building06Icon,
+  Settings02Icon,
+  Calendar03Icon,
+} from "@hugeicons/core-free-icons"
 import { api } from "@/lib/api"
 import { useRole } from "@/contexts/role-context"
 import { DASHBOARD_COUNTS_REFRESH_EVENT } from "@/lib/dashboard-events"
@@ -33,13 +41,15 @@ export function AppSidebar({
   const refreshCounts = useCallback(() => {
     if (!canEdit) return
 
-    void Promise.allSettled([api.serviceEvents.getStats()]).then(([serviceResult]) => {
-      if (serviceResult.status === "fulfilled") {
-        setActiveServiceCount(
-          serviceResult.value.inProgress + serviceResult.value.overdue
-        )
+    void Promise.allSettled([api.serviceEvents.getStats()]).then(
+      ([serviceResult]) => {
+        if (serviceResult.status === "fulfilled") {
+          setActiveServiceCount(
+            serviceResult.value.inProgress + serviceResult.value.overdue
+          )
+        }
       }
-    })
+    )
   }, [canEdit])
 
   useEffect(() => {
@@ -55,16 +65,12 @@ export function AppSidebar({
     {
       title: "Дашборд",
       url: "/dashboard",
-      icon: (
-        <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />,
     },
     {
       title: "План-график",
       url: "/dashboard/planning",
-      icon: (
-        <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />,
       children: [
         {
           title: "Планирование",
@@ -83,24 +89,28 @@ export function AppSidebar({
     {
       title: "Строительная техника",
       url: "/dashboard/fleet",
-      icon: (
-        <HugeiconsIcon icon={Car01Icon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={Car01Icon} strokeWidth={2} />,
     },
     {
       title: "ТО и ремонты",
       url: "/dashboard/service",
-      icon: (
-        <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />,
       badge: canEdit ? activeServiceCount : undefined,
+      children: [
+        {
+          title: "Заявки",
+          url: "/dashboard/service",
+        },
+        {
+          title: "Справочник ремонтов",
+          url: "/dashboard/service/repairs",
+        },
+      ],
     },
     {
       title: "Дорожные объекты",
       url: "/dashboard/sites",
-      icon: (
-        <HugeiconsIcon icon={Building06Icon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={Building06Icon} strokeWidth={2} />,
     },
   ]
 
@@ -108,9 +118,7 @@ export function AppSidebar({
     {
       name: "Пользователи",
       url: "/dashboard/users",
-      icon: (
-        <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} />
-      ),
+      icon: <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} />,
     },
   ]
 
@@ -124,8 +132,14 @@ export function AppSidebar({
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
               <a href="/dashboard">
-                <HugeiconsIcon icon={CommandIcon} strokeWidth={2} className="size-5!" />
-                <span className="text-base font-semibold">Панель управления</span>
+                <HugeiconsIcon
+                  icon={CommandIcon}
+                  strokeWidth={2}
+                  className="size-5!"
+                />
+                <span className="text-base font-semibold">
+                  Панель управления
+                </span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
