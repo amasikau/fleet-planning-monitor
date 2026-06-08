@@ -11,6 +11,10 @@ export class UpdateSiteDto {
 
   @IsOptional()
   @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
   address?: string;
 
   @IsOptional()

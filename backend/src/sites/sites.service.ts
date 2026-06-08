@@ -21,6 +21,7 @@ export interface ConstructionSiteView {
   id: string;
   name: string;
   workType: string;
+  city: string;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -55,11 +56,11 @@ export interface AvailableVehicleView {
 }
 
 const siteListInclude = {
-  _count: { select: { vehicles: true } },
+  _count: { select: { vehicles: true, equipmentPlans: true } },
 } satisfies Prisma.ConstructionSiteInclude;
 
 const siteDetailInclude = {
-  _count: { select: { vehicles: true } },
+  _count: { select: { vehicles: true, equipmentPlans: true } },
   vehicles: {
     include: {
       vehicle: true,
@@ -84,6 +85,7 @@ export class SitesService {
       id: site.id,
       name: site.name,
       workType: site.workType,
+      city: site.city,
       address: site.address,
       latitude: site.latitude,
       longitude: site.longitude,
@@ -92,7 +94,7 @@ export class SitesService {
       isCompleted: site.isCompleted,
       completedAt: site.completedAt?.toISOString() ?? null,
       notes: site.notes,
-      vehicleCount: site._count.vehicles,
+      vehicleCount: site._count.equipmentPlans,
       createdAt: site.createdAt.toISOString(),
       updatedAt: site.updatedAt.toISOString(),
     };
@@ -101,7 +103,7 @@ export class SitesService {
   private formatSiteDetail(site: SiteDetailRecord): ConstructionSiteDetailView {
     return {
       ...this.formatSite(site as unknown as SiteListRecord),
-      vehicleCount: site._count.vehicles,
+      vehicleCount: site._count.equipmentPlans,
       vehicles: site.vehicles.map((sv) => ({
         id: sv.id,
         vehicleId: sv.vehicle.id,
@@ -135,7 +137,7 @@ export class SitesService {
     const sites = await this.prisma.constructionSite.findMany({
       where: { isCompleted: false },
       include: siteListInclude,
-      orderBy: [{ workPeriodEnd: 'asc' }, { updatedAt: 'desc' }],
+      orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
     });
     return sites.map((site) => this.formatSite(site));
   }
@@ -163,15 +165,22 @@ export class SitesService {
     performedById: string,
   ): Promise<ConstructionSiteView> {
     const name = dto.name.trim();
+    const workPeriodStart = dto.workPeriodStart
+      ? new Date(dto.workPeriodStart)
+      : new Date();
+    const workPeriodEnd = dto.workPeriodEnd
+      ? new Date(dto.workPeriodEnd)
+      : workPeriodStart;
     const site = await this.prisma.constructionSite.create({
       data: {
         name,
-        workType: dto.workType?.trim() ?? '',
+        workType: dto.workType?.trim() || 'Планирование',
+        city: dto.city?.trim() ?? '',
         address: dto.address?.trim() ?? '',
         latitude: dto.latitude ?? null,
         longitude: dto.longitude ?? null,
-        workPeriodStart: new Date(dto.workPeriodStart),
-        workPeriodEnd: new Date(dto.workPeriodEnd),
+        workPeriodStart,
+        workPeriodEnd,
         notes: dto.notes?.trim() ?? '',
       },
       include: siteListInclude,
@@ -202,17 +211,7 @@ export class SitesService {
       where: { id },
       data: {
         name: dto.name?.trim(),
-        workType: dto.workType?.trim(),
         address: dto.address?.trim(),
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        workPeriodStart: dto.workPeriodStart
-          ? new Date(dto.workPeriodStart)
-          : undefined,
-        workPeriodEnd: dto.workPeriodEnd
-          ? new Date(dto.workPeriodEnd)
-          : undefined,
-        notes: dto.notes !== undefined ? dto.notes.trim() : undefined,
       },
       include: siteListInclude,
     });
@@ -221,34 +220,8 @@ export class SitesService {
     if (dto.name?.trim() && dto.name.trim() !== existing.name) {
       editedFields.push('название');
     }
-    if (dto.workType !== undefined && dto.workType.trim() !== existing.workType) {
-      editedFields.push('вид работ');
-    }
     if (dto.address !== undefined && dto.address.trim() !== existing.address) {
       editedFields.push('адрес');
-    }
-    if (dto.latitude !== undefined && dto.latitude !== existing.latitude) {
-      editedFields.push('широта');
-    }
-    if (dto.longitude !== undefined && dto.longitude !== existing.longitude) {
-      editedFields.push('долгота');
-    }
-    if (
-      dto.workPeriodStart &&
-      new Date(dto.workPeriodStart).toISOString() !==
-        existing.workPeriodStart.toISOString()
-    ) {
-      editedFields.push('начало периода');
-    }
-    if (
-      dto.workPeriodEnd &&
-      new Date(dto.workPeriodEnd).toISOString() !==
-        existing.workPeriodEnd.toISOString()
-    ) {
-      editedFields.push('конец периода');
-    }
-    if (dto.notes !== undefined && dto.notes.trim() !== existing.notes) {
-      editedFields.push('примечание');
     }
 
     if (editedFields.length > 0) {
@@ -319,34 +292,12 @@ export class SitesService {
     vehicleId: string,
     performedById: string,
   ): Promise<{ success: boolean }> {
-    const site = await this.prisma.constructionSite.findUnique({
-      where: { id: siteId },
-    });
-    if (!site) throw new NotFoundException('Объект не найден');
-
-    const vehicle = await this.prisma.fleetVehicle.findUnique({
-      where: { id: vehicleId },
-    });
-    if (!vehicle) throw new NotFoundException('Транспорт не найден');
-
-    const exists = await this.prisma.siteVehicle.findUnique({
-      where: { siteId_vehicleId: { siteId, vehicleId } },
-    });
-    if (exists) {
-      throw new ConflictException('Транспорт уже назначен на этот объект');
-    }
-
-    await this.prisma.siteVehicle.create({ data: { siteId, vehicleId } });
-
-    await this.createAuditLog({
-      action: 'assign_vehicle',
-      targetSiteId: siteId,
-      siteLabel: site.name,
-      performedById,
-      details: `Назначена техника: ${vehicle.brand} ${vehicle.model} (${vehicle.plateNumber})`,
-    });
-
-    return { success: true };
+    void siteId;
+    void vehicleId;
+    void performedById;
+    throw new ConflictException(
+      'Ручное назначение техники отключено. Используйте план-график.',
+    );
   }
 
   async unassignVehicle(
@@ -354,32 +305,12 @@ export class SitesService {
     vehicleId: string,
     performedById: string,
   ): Promise<{ success: boolean }> {
-    const site = await this.prisma.constructionSite.findUnique({
-      where: { id: siteId },
-    });
-    if (!site) throw new NotFoundException('Объект не найден');
-
-    const vehicle = await this.prisma.fleetVehicle.findUnique({
-      where: { id: vehicleId },
-    });
-    if (!vehicle) throw new NotFoundException('Транспорт не найден');
-
-    const assignment = await this.prisma.siteVehicle.findUnique({
-      where: { siteId_vehicleId: { siteId, vehicleId } },
-    });
-    if (!assignment) throw new NotFoundException('Назначение не найдено');
-
-    await this.prisma.siteVehicle.delete({ where: { id: assignment.id } });
-
-    await this.createAuditLog({
-      action: 'unassign_vehicle',
-      targetSiteId: siteId,
-      siteLabel: site.name,
-      performedById,
-      details: `Снята техника: ${vehicle.brand} ${vehicle.model} (${vehicle.plateNumber})`,
-    });
-
-    return { success: true };
+    void siteId;
+    void vehicleId;
+    void performedById;
+    throw new ConflictException(
+      'Ручное снятие техники отключено. Используйте план-график.',
+    );
   }
 
   async getAvailableVehicles(siteId?: string): Promise<AvailableVehicleView[]> {

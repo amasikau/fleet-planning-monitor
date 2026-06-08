@@ -22,6 +22,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { toast } from "sonner"
@@ -30,46 +37,36 @@ import {
   Delete02Icon,
   PencilEdit02Icon,
   CheckmarkBadge01Icon,
-  AlertCircleIcon,
 } from "@hugeicons/core-free-icons"
 
-const DAY_IN_MS = 1000 * 60 * 60 * 24
-
-function formatDateInput(value: string) {
-  return new Date(value).toISOString().slice(0, 10)
-}
-
-function getRelativeDate(daysFromNow: number) {
-  return new Date(Date.now() + daysFromNow * DAY_IN_MS)
-    .toISOString()
-    .slice(0, 10)
-}
+const BELARUS_CITIES = [
+  "Минск",
+  "Гомель",
+  "Могилёв",
+  "Витебск",
+  "Гродно",
+  "Брест",
+  "Бобруйск",
+  "Барановичи",
+  "Борисов",
+  "Пинск",
+]
 
 export interface SiteFormValues {
   name: string
-  workType: string
+  city: string
   address: string
   latitude: string
   longitude: string
-  workPeriodStart: string
-  workPeriodEnd: string
-  notes: string
 }
 
 function createInitialForm(site?: ConstructionSite | null): SiteFormValues {
   return {
     name: site?.name ?? "",
-    workType: site?.workType ?? "",
+    city: site?.city ?? "",
     address: site?.address ?? "",
     latitude: site?.latitude != null ? String(site.latitude) : "",
     longitude: site?.longitude != null ? String(site.longitude) : "",
-    workPeriodStart: site?.workPeriodStart
-      ? formatDateInput(site.workPeriodStart)
-      : getRelativeDate(0),
-    workPeriodEnd: site?.workPeriodEnd
-      ? formatDateInput(site.workPeriodEnd)
-      : getRelativeDate(90),
-    notes: site?.notes ?? "",
   }
 }
 
@@ -84,13 +81,10 @@ export function SiteFormDialog({
   site?: ConstructionSite | null
   onSave: (values: {
     name: string
-    workType?: string
+    city?: string
     address?: string
     latitude?: number
     longitude?: number
-    workPeriodStart: string
-    workPeriodEnd: string
-    notes?: string
   }) => void
 }) {
   const isEdit = !!site
@@ -103,7 +97,7 @@ export function SiteFormDialog({
     const addr = form.address.trim()
     if (!addr) return
     setGeocoding(true)
-    forwardGeocode(addr)
+    forwardGeocode(form.city ? `${form.city}, ${addr}` : addr)
       .then((result) => {
         if (result) {
           setForm((prev) => ({
@@ -122,16 +116,12 @@ export function SiteFormDialog({
       toast.error("Укажите название объекта")
       return
     }
-    if (!form.workPeriodStart) {
-      toast.error("Укажите начало периода работ")
+    if (!isEdit && !form.city) {
+      toast.error("Выберите город")
       return
     }
-    if (!form.workPeriodEnd) {
-      toast.error("Укажите конец периода работ")
-      return
-    }
-    if (form.workPeriodEnd < form.workPeriodStart) {
-      toast.error("Конец периода не может быть раньше начала")
+    if (!form.address.trim()) {
+      toast.error("Укажите адрес объекта")
       return
     }
 
@@ -146,29 +136,26 @@ export function SiteFormDialog({
       toast.error("Широта должна быть числом от -90 до 90")
       return
     }
-    if (
-      lon !== undefined &&
-      (Number.isNaN(lon) || lon < -180 || lon > 180)
-    ) {
+    if (lon !== undefined && (Number.isNaN(lon) || lon < -180 || lon > 180)) {
       toast.error("Долгота должна быть числом от -180 до 180")
+      return
+    }
+    if (!isEdit && (lat === undefined || lon === undefined)) {
+      toast.error("Выберите точку объекта на карте")
       return
     }
 
     onSave({
       name: form.name.trim(),
-      workType: form.workType.trim() || undefined,
+      ...(!isEdit ? { city: form.city } : {}),
       address: form.address.trim() || undefined,
-      latitude: lat,
-      longitude: lon,
-      workPeriodStart: form.workPeriodStart,
-      workPeriodEnd: form.workPeriodEnd,
-      notes: form.notes.trim() || undefined,
+      ...(!isEdit ? { latitude: lat, longitude: lon } : {}),
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HugeiconsIcon
@@ -180,8 +167,8 @@ export function SiteFormDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Актуализируйте параметры дорожного объекта."
-              : "Добавьте новый дорожный объект."}
+              ? "Измените название и адрес дорожного объекта."
+              : "Добавьте дорожный объект для дальнейшего планирования работ."}
           </DialogDescription>
         </DialogHeader>
 
@@ -202,19 +189,30 @@ export function SiteFormDialog({
                 className="h-9"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Вид работ
-              </label>
-              <Input
-                value={form.workType}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, workType: e.target.value }))
-                }
-                placeholder="Капитальный ремонт дорожного покрытия"
-                className="h-9"
-              />
-            </div>
+            {!isEdit && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Город *
+                </label>
+                <Select
+                  value={form.city}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({ ...prev, city: value }))
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Выберите город" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BELARUS_CITIES.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div>
@@ -233,7 +231,7 @@ export function SiteFormDialog({
                     handleSearchAddress()
                   }
                 }}
-                placeholder="Москва, Ленинградское ш., вл. 45"
+                placeholder="Улица, район или участок дороги"
                 className="h-9 flex-1"
               />
               <Button
@@ -253,111 +251,37 @@ export function SiteFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Широта (latitude)
-              </label>
-              <Input
-                value={form.latitude}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, latitude: e.target.value }))
-                }
-                placeholder="55.7558"
-                className="h-9"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Долгота (longitude)
-              </label>
-              <Input
-                value={form.longitude}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, longitude: e.target.value }))
-                }
-                placeholder="37.6173"
-                className="h-9"
-              />
-            </div>
-          </div>
-
           {/* Map picker — click to select coordinates and auto-fill address */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Выберите точку на карте
-            </label>
-            <YandexMapPicker
-              latitude={
-                form.latitude ? Number.parseFloat(form.latitude) : undefined
-              }
-              longitude={
-                form.longitude ? Number.parseFloat(form.longitude) : undefined
-              }
-              onSelect={(lat, lng, address) => {
-                setForm((prev) => ({
-                  ...prev,
-                  latitude: lat.toFixed(6),
-                  longitude: lng.toFixed(6),
-                  address: address || prev.address,
-                }))
-              }}
-              height={250}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Кликните по карте для выбора координат. Адрес заполнится
-              автоматически.
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          {!isEdit && (
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Начало периода работ *
+                Точка объекта на карте *
               </label>
-              <Input
-                type="date"
-                value={form.workPeriodStart}
-                onChange={(e) =>
+              <YandexMapPicker
+                latitude={
+                  form.latitude ? Number.parseFloat(form.latitude) : undefined
+                }
+                longitude={
+                  form.longitude ? Number.parseFloat(form.longitude) : undefined
+                }
+                onSelect={(lat, lng, address) => {
                   setForm((prev) => ({
                     ...prev,
-                    workPeriodStart: e.target.value,
+                    latitude: lat.toFixed(6),
+                    longitude: lng.toFixed(6),
+                    address: address || prev.address,
                   }))
-                }
-                className="h-9"
+                }}
+                height={250}
               />
+              {form.latitude && form.longitude && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {Number.parseFloat(form.latitude).toFixed(4)},{" "}
+                  {Number.parseFloat(form.longitude).toFixed(4)}
+                </p>
+              )}
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Конец периода работ *
-              </label>
-              <Input
-                type="date"
-                value={form.workPeriodEnd}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    workPeriodEnd: e.target.value,
-                  }))
-                }
-                className="h-9"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Комментарий
-            </label>
-            <textarea
-              value={form.notes}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, notes: e.target.value }))
-              }
-              placeholder="Краткая оперативная заметка по объекту"
-              className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -437,62 +361,31 @@ export function CompleteSiteDialog({
   site: ConstructionSite | null
   onConfirm: () => void
 }) {
-  const isEarly =
-    site != null && new Date() < new Date(site.workPeriodEnd)
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader className="!place-items-center !text-center">
-          <div
-            className={`mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full ${
-              isEarly
-                ? "bg-amber-100 dark:bg-amber-900/30"
-                : "bg-emerald-100 dark:bg-emerald-900/30"
-            }`}
-          >
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
             <HugeiconsIcon
-              icon={isEarly ? AlertCircleIcon : CheckmarkBadge01Icon}
+              icon={CheckmarkBadge01Icon}
               strokeWidth={2}
-              className={`size-6 ${isEarly ? "text-amber-600" : "text-emerald-600"}`}
+              className="size-6 text-emerald-600"
             />
           </div>
           <AlertDialogTitle className="text-center">
             Завершение объекта
           </AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            {isEarly ? (
-              <>
-                <span className="mb-2 block font-semibold text-amber-600">
-                  Раньше срока!
-                </span>
-                Период работ ещё не завершён. Вы уверены, что хотите пометить
-                объект{" "}
-                <span className="font-semibold text-foreground">
-                  {site?.name}
-                </span>{" "}
-                как готовый?
-              </>
-            ) : (
-              <>
-                Пометить объект{" "}
-                <span className="font-semibold text-foreground">
-                  {site?.name}
-                </span>{" "}
-                как завершённый? Он будет перемещён в архив.
-              </>
-            )}
+            Пометить объект{" "}
+            <span className="font-semibold text-foreground">{site?.name}</span>{" "}
+            как завершённый? Он будет перемещён в архив.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Отмена</AlertDialogCancel>
           <Button
-            variant={isEarly ? "default" : "default"}
-            className={
-              isEarly
-                ? "bg-amber-600 hover:bg-amber-700 text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-            }
+            variant="default"
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
             onClick={onConfirm}
           >
             <HugeiconsIcon
@@ -500,7 +393,7 @@ export function CompleteSiteDialog({
               strokeWidth={2}
               className="mr-1 size-4"
             />
-            {isEarly ? "Всё равно завершить" : "Готово"}
+            Готово
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

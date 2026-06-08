@@ -17,7 +17,7 @@ export function SitesStats({
   activeSites: ConstructionSite[]
   archivedSites: ConstructionSite[]
 }) {
-  const totalVehicles = [...activeSites, ...archivedSites].reduce(
+  const totalPlanAssignments = [...activeSites, ...archivedSites].reduce(
     (sum, s) => sum + s.vehicleCount,
     0
   )
@@ -45,8 +45,8 @@ export function SitesStats({
       bgClass: "bg-sky-500/12",
     },
     {
-      label: "Единиц техники",
-      value: totalVehicles,
+      label: "Смен техники",
+      value: totalPlanAssignments,
       icon: Car01Icon,
       iconClass: "text-amber-600",
       bgClass: "bg-amber-500/12",
@@ -68,7 +68,7 @@ export function SitesStats({
               />
             </div>
             <div>
-              <p className="text-2xl font-bold tabular-nums leading-none">
+              <p className="text-2xl leading-none font-bold tabular-nums">
                 {stat.value}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>

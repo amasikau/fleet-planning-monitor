@@ -1,0 +1,1 @@
+ALTER TABLE "ConstructionSite" ADD COLUMN "city" TEXT NOT NULL DEFAULT '';

@@ -34,15 +34,11 @@ import {
   Location01Icon,
 } from "@hugeicons/core-free-icons"
 
-type SortKey = "name" | "workType" | "workPeriodEnd"
+type SortKey = "name" | "city"
 type SortDir = "asc" | "desc"
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value))
+function getWorkTypeLabel() {
+  return "Не указан"
 }
 
 interface SitesTableProps {
@@ -68,8 +64,12 @@ export function SitesTable({
 
   const [editingSite, setEditingSite] = useState<ConstructionSite | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
-  const [deletingSite, setDeletingSite] = useState<ConstructionSite | null>(null)
-  const [completingSite, setCompletingSite] = useState<ConstructionSite | null>(null)
+  const [deletingSite, setDeletingSite] = useState<ConstructionSite | null>(
+    null
+  )
+  const [completingSite, setCompletingSite] = useState<ConstructionSite | null>(
+    null
+  )
   const [detailSiteId, setDetailSiteId] = useState<string | null>(null)
 
   const [search, setSearch] = useState("")
@@ -93,7 +93,7 @@ export function SitesTable({
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.workType.toLowerCase().includes(q) ||
+          s.city.toLowerCase().includes(q) ||
           s.address.toLowerCase().includes(q) ||
           s.notes.toLowerCase().includes(q)
       )
@@ -186,7 +186,7 @@ export function SitesTable({
               <HugeiconsIcon
                 icon={SearchIcon}
                 strokeWidth={2}
-                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
               />
               <Input
                 value={search}
@@ -232,11 +232,16 @@ export function SitesTable({
                 </TableHead>
                 <TableHead
                   className="cursor-pointer select-none"
-                  onClick={() => toggleSort("workType")}
+                  onClick={() => toggleSort("city")}
                 >
                   <span className="inline-flex items-center gap-1.5">
+                    Город
+                    {renderSortIcon("city")}
+                  </span>
+                </TableHead>
+                <TableHead className="select-none">
+                  <span className="inline-flex items-center gap-1.5">
                     Вид работ
-                    {renderSortIcon("workType")}
                   </span>
                 </TableHead>
                 <TableHead className="select-none">
@@ -249,15 +254,6 @@ export function SitesTable({
                     Координаты
                   </span>
                 </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none"
-                  onClick={() => toggleSort("workPeriodEnd")}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    Период работ
-                    {renderSortIcon("workPeriodEnd")}
-                  </span>
-                </TableHead>
                 <TableHead className="select-none">
                   <span className="inline-flex items-center gap-1.5">
                     <HugeiconsIcon
@@ -265,7 +261,7 @@ export function SitesTable({
                       strokeWidth={2}
                       className="size-3.5 text-muted-foreground"
                     />
-                    Техника
+                    План техники
                   </span>
                 </TableHead>
               </TableRow>
@@ -298,7 +294,10 @@ export function SitesTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {site.workType || "—"}
+                      {site.city || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {getWorkTypeLabel()}
                     </TableCell>
                     <TableCell>
                       {site.latitude != null && site.longitude != null ? (
@@ -315,10 +314,6 @@ export function SitesTable({
                       ) : (
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatDate(site.workPeriodStart)} —{" "}
-                      {formatDate(site.workPeriodEnd)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="text-xs">
@@ -340,11 +335,12 @@ export function SitesTable({
         siteId={detailSiteId}
         readonly={readonly}
         onEdit={(site) => setEditingSite(site as unknown as ConstructionSite)}
-        onDelete={(site) => setDeletingSite(site as unknown as ConstructionSite)}
+        onDelete={(site) =>
+          setDeletingSite(site as unknown as ConstructionSite)
+        }
         onComplete={(site) =>
           setCompletingSite(site as unknown as ConstructionSite)
         }
-        onDataChange={() => onDataChange?.()}
       />
 
       {!readonly && (

@@ -524,7 +524,7 @@ export function SitesOverviewMap({
                 "<strong>" +
                 site.name +
                 "</strong><br/>" +
-                (site.workType || "Вид работ не указан"),
+                "Вид работ не указан",
             },
             { preset: "islands#blueCircleDotIcon" },
           )

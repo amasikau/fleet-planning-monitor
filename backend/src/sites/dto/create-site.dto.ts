@@ -10,6 +10,10 @@ export class CreateSiteDto {
 
   @IsOptional()
   @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
   address?: string;
 
   @IsOptional()
@@ -20,11 +24,13 @@ export class CreateSiteDto {
   @IsNumber()
   longitude?: number;
 
+  @IsOptional()
   @IsDateString()
-  workPeriodStart: string;
+  workPeriodStart?: string;
 
+  @IsOptional()
   @IsDateString()
-  workPeriodEnd: string;
+  workPeriodEnd?: string;
 
   @IsOptional()
   @IsString()

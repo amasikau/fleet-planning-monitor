@@ -567,6 +567,7 @@ export interface ConstructionSite {
   id: string
   name: string
   workType: string
+  city: string
   address: string
   latitude: number | null
   longitude: number | null
