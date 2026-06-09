@@ -1606,7 +1606,7 @@ function ObjectSidebar({
   onSelect: (siteId: string) => void
 }) {
   return (
-    <ScrollArea className="h-[calc(100vh-13rem)]">
+    <ScrollArea className="h-80 md:h-[calc(100vh-13rem)]">
       <div className="flex flex-col gap-2 pr-3">
         {sites.map((site) => {
           const count = stagesBySite.get(site.id) ?? 0
@@ -1617,17 +1617,22 @@ function ObjectSidebar({
               type="button"
               onClick={() => onSelect(site.id)}
               className={cn(
-                "rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted",
+                "w-full overflow-hidden rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted",
                 selectedSiteId === site.id && "border-primary bg-muted"
               )}
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm leading-snug font-medium">{site.name}</p>
-                <Badge variant={count > 0 ? "default" : "secondary"}>
+                <p className="min-w-0 text-sm leading-snug font-medium break-words">
+                  {site.name}
+                </p>
+                <Badge
+                  className="shrink-0"
+                  variant={count > 0 ? "default" : "secondary"}
+                >
                   {count > 0 ? "План" : "Нет"}
                 </Badge>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+              <p className="mt-1 line-clamp-2 min-w-0 text-xs break-words text-muted-foreground">
                 {site.workType || site.address}
               </p>
             </button>
@@ -1911,53 +1916,97 @@ export default function PlanningPage() {
       </div>
 
       <div className="px-4 lg:px-6">
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="min-h-[calc(100vh-12rem)] rounded-lg border"
-        >
-          <ResizablePanel defaultSize="28%" minSize="20%" maxSize="38%">
-            <div className="flex h-full flex-col gap-3 p-4">
-              <div>
-                <p className="text-sm font-medium">Дорожные объекты</p>
-                <p className="text-xs text-muted-foreground">
-                  Выберите объект, чтобы открыть его план.
-                </p>
-              </div>
-              <ObjectSidebar
-                sites={sites}
-                selectedSiteId={selectedSiteId}
-                stagesBySite={stagesBySite}
-                onSelect={setSelectedSiteId}
+        <div className="flex flex-col gap-4 rounded-lg border p-4 md:hidden">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium break-words">
+                Дорожные объекты
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Выберите объект, чтобы открыть его план.
+              </p>
+            </div>
+            <ObjectSidebar
+              sites={sites}
+              selectedSiteId={selectedSiteId}
+              stagesBySite={stagesBySite}
+              onSelect={setSelectedSiteId}
+            />
+          </div>
+          <Separator />
+          <div>
+            {!selectedSite ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Объект не выбран</CardTitle>
+                  <CardDescription>
+                    Выберите объект. До выбора объекта графики не отображаются.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : (
+              <SavedPlanView
+                site={selectedSite}
+                stages={selectedStages}
+                plans={selectedPlans}
+                serviceEvents={serviceEvents}
+                onPlanClick={() => setPlanningOpen(true)}
+                onResetPlan={handleResetPlan}
+                resetLoading={resettingPlan}
               />
-            </div>
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize="72%">
-            <div className="h-full p-4">
-              {!selectedSite ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Объект не выбран</CardTitle>
-                    <CardDescription>
-                      Слева выберите объект. До выбора объекта графики не
-                      отображаются.
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              ) : (
-                <SavedPlanView
-                  site={selectedSite}
-                  stages={selectedStages}
-                  plans={selectedPlans}
-                  serviceEvents={serviceEvents}
-                  onPlanClick={() => setPlanningOpen(true)}
-                  onResetPlan={handleResetPlan}
-                  resetLoading={resettingPlan}
+            )}
+          </div>
+        </div>
+
+        <div className="hidden md:block">
+          <ResizablePanelGroup
+            direction="horizontal"
+            className="min-h-[calc(100vh-12rem)] rounded-lg border"
+          >
+            <ResizablePanel defaultSize="28%" minSize="20%" maxSize="38%">
+              <div className="flex h-full flex-col gap-3 p-4">
+                <div>
+                  <p className="text-sm font-medium">Дорожные объекты</p>
+                  <p className="text-xs text-muted-foreground">
+                    Выберите объект, чтобы открыть его план.
+                  </p>
+                </div>
+                <ObjectSidebar
+                  sites={sites}
+                  selectedSiteId={selectedSiteId}
+                  stagesBySite={stagesBySite}
+                  onSelect={setSelectedSiteId}
                 />
-              )}
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize="72%">
+              <div className="h-full p-4">
+                {!selectedSite ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Объект не выбран</CardTitle>
+                      <CardDescription>
+                        Слева выберите объект. До выбора объекта графики не
+                        отображаются.
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                ) : (
+                  <SavedPlanView
+                    site={selectedSite}
+                    stages={selectedStages}
+                    plans={selectedPlans}
+                    serviceEvents={serviceEvents}
+                    onPlanClick={() => setPlanningOpen(true)}
+                    onResetPlan={handleResetPlan}
+                    resetLoading={resettingPlan}
+                  />
+                )}
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
       </div>
 
       <PlanWizardDialog
