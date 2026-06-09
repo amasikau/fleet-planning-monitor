@@ -8,6 +8,7 @@ import {
   FleetRepairTemplate,
   FleetServiceEventStatus,
   FleetServiceEventType,
+  FleetVehicleStatus,
   FleetVehicleType,
   Prisma,
   UserRole,
@@ -257,13 +258,24 @@ export class ServiceEventsService {
     };
   }
 
+  private isBlockedVehicleStatus(status: FleetVehicleStatus) {
+    return status === 'maintenance' || status === 'repair';
+  }
+
+  private getRestoredVehicleStatus(previousStatus: FleetVehicleStatus) {
+    return this.isBlockedVehicleStatus(previousStatus)
+      ? 'active'
+      : previousStatus;
+  }
+
   private async recalcVehicleStatus(vehicleId: string) {
-    const activeRepairs = await this.prisma.fleetServiceEvent.count({
+    const activeServiceEvents = await this.prisma.fleetServiceEvent.findMany({
       where: {
         vehicleId,
         status: 'in_progress',
         type: { in: ['repair', 'maintenance'] },
       },
+      select: { type: true },
     });
 
     const vehicle = await this.prisma.fleetVehicle.findUnique({
@@ -271,22 +283,43 @@ export class ServiceEventsService {
     });
     if (!vehicle) return;
 
-    if (activeRepairs > 0 && vehicle.status !== 'maintenance') {
+    const nextBlockedStatus: FleetVehicleStatus | null =
+      activeServiceEvents.length === 0
+        ? null
+        : activeServiceEvents.some((event) => event.type === 'repair')
+          ? 'repair'
+          : 'maintenance';
+
+    if (nextBlockedStatus) {
+      const data: Prisma.FleetVehicleUpdateInput = {
+        status: nextBlockedStatus,
+      };
+
+      if (!this.isBlockedVehicleStatus(vehicle.status)) {
+        data.previousStatus = vehicle.status;
+      }
+
+      if (
+        vehicle.status !== nextBlockedStatus ||
+        data.previousStatus !== undefined
+      ) {
+        await this.prisma.fleetVehicle.update({
+          where: { id: vehicleId },
+          data,
+        });
+      }
+      return;
+    }
+
+    if (this.isBlockedVehicleStatus(vehicle.status)) {
+      const restoredStatus = this.getRestoredVehicleStatus(
+        vehicle.previousStatus,
+      );
       await this.prisma.fleetVehicle.update({
         where: { id: vehicleId },
         data: {
-          previousStatus: vehicle.status,
-          status: 'maintenance',
-        },
-      });
-    } else if (
-      activeRepairs === 0 &&
-      (vehicle.status === 'maintenance' || vehicle.status === 'repair')
-    ) {
-      await this.prisma.fleetVehicle.update({
-        where: { id: vehicleId },
-        data: {
-          status: vehicle.previousStatus,
+          previousStatus: restoredStatus,
+          status: restoredStatus,
         },
       });
     }
@@ -566,7 +599,11 @@ export class ServiceEventsService {
       include: serviceEventInclude,
     });
 
-    if (dto.status !== undefined && dto.status !== existing.status) {
+    if (
+      dto.status !== undefined ||
+      dto.type !== undefined ||
+      dto.repairTemplateId !== undefined
+    ) {
       await this.recalcVehicleStatus(existing.vehicleId);
     }
 
