@@ -33,6 +33,7 @@ import {
   EquipmentPlanStatsView,
   EquipmentPlanView,
   EquipmentPlansService,
+  ResetEquipmentPlanView,
   RoadWorkTypeTemplateView,
   RoadWorkStageView,
   RoadWorkStageTemplateView,
@@ -55,7 +56,9 @@ export class EquipmentPlansController {
   }
 
   @Get('stages')
-  async getStages(@Query('siteId') siteId?: string): Promise<RoadWorkStageView[]> {
+  async getStages(
+    @Query('siteId') siteId?: string,
+  ): Promise<RoadWorkStageView[]> {
     return this.equipmentPlansService.getStages({ siteId });
   }
 
@@ -138,6 +141,14 @@ export class EquipmentPlansController {
     @Param('id') id: string,
   ): Promise<{ success: boolean }> {
     return this.equipmentPlansService.removeStageTemplate(id);
+  }
+
+  @Roles('admin', 'user')
+  @Delete('site/:siteId')
+  async resetSitePlan(
+    @Param('siteId') siteId: string,
+  ): Promise<ResetEquipmentPlanView> {
+    return this.equipmentPlansService.resetSitePlan(siteId);
   }
 
   @Roles('admin', 'user')

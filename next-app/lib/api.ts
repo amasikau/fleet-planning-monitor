@@ -135,12 +135,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
     deleteRepairTemplate: (id: string) =>
-      fetchApi<{ success: boolean }>(
-        `/service-events/repair-templates/${id}`,
-        {
-          method: "DELETE",
-        }
-      ),
+      fetchApi<{ success: boolean }>(`/service-events/repair-templates/${id}`, {
+        method: "DELETE",
+      }),
     create: (data: Record<string, unknown>) =>
       fetchApi<ServiceEvent>("/service-events", {
         method: "POST",
@@ -237,10 +234,13 @@ export const api = {
         body: JSON.stringify(data),
       }),
     updateStageTemplate: (id: string, data: Record<string, unknown>) =>
-      fetchApi<RoadWorkStageTemplate>(`/equipment-plans/stage-templates/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
+      fetchApi<RoadWorkStageTemplate>(
+        `/equipment-plans/stage-templates/${id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(data),
+        }
+      ),
     deleteStageTemplate: (id: string) =>
       fetchApi<{ success: boolean }>(`/equipment-plans/stage-templates/${id}`, {
         method: "DELETE",
@@ -255,6 +255,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    resetSitePlan: (siteId: string) =>
+      fetchApi<{
+        siteId: string
+        deletedStages: number
+        deletedDemands: number
+        deletedAssignments: number
+      }>(`/equipment-plans/site/${siteId}`, { method: "DELETE" }),
     create: (data: Record<string, unknown>) =>
       fetchApi<EquipmentPlan>("/equipment-plans", {
         method: "POST",

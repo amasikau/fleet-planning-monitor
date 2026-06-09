@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { EquipmentPlansService } from './equipment-plans.service';
 
 const baseSite = {
@@ -98,12 +99,25 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
     },
     fleetVehicle: {
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(fleetVehicle('dump-1')),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     equipmentPlanAssignment: {
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    equipmentDemand: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    roadWorkStage: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     fleetServiceEvent: {
       findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
       callback(tx),
@@ -117,6 +131,66 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
 
 function dateKey(value: string) {
   return value.slice(0, 10);
+}
+
+function stageRecord(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'stage-1',
+    siteId: baseSite.id,
+    site: baseSite,
+    type: 'material_delivery',
+    name: 'Подвоз материала',
+    status: 'planned',
+    startDate: new Date('2026-06-10T00:00:00.000Z'),
+    endDate: new Date('2026-06-12T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function demandRecord(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'demand-1',
+    siteId: baseSite.id,
+    site: baseSite,
+    stageId: 'stage-1',
+    stage: stageRecord(),
+    vehicleType: 'dump_truck',
+    requiredCount: 1,
+    plannedHours: 8,
+    priority: 'normal',
+    notes: '',
+    createdAt: new Date('2026-06-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function planRecord(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'plan-1',
+    siteId: baseSite.id,
+    stageId: 'stage-1',
+    demandId: 'demand-1',
+    vehicleId: 'dump-1',
+    workDate: new Date('2026-06-10T00:00:00.000Z'),
+    shift: 'day',
+    plannedHours: 8,
+    actualHours: null,
+    status: 'planned',
+    notes: '',
+    vehicle: {
+      id: 'dump-1',
+      type: 'dump_truck',
+      status: 'active',
+    },
+    ...overrides,
+  };
 }
 
 describe('EquipmentPlansService planning draft', () => {
@@ -799,5 +873,242 @@ describe('EquipmentPlansService applying draft', () => {
     expect(result.createdAssignments).toBe(1);
     expect(result.skippedAssignments).toBe(1);
     expect(prisma.__tx.equipmentPlanAssignment.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores saved assignments from the same site while applying a recalculation', async () => {
+    const vehicle = fleetVehicle('dump-1');
+    const prisma = createPrismaMock({
+      fleetVehicle: {
+        findMany: jest.fn().mockResolvedValue([vehicle]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    await service.applyDraft(
+      {
+        ...baseDto,
+        replaceExisting: true,
+        stages: [
+          draftStage({
+            name: 'Подвоз смеси',
+            equipmentRules: [equipmentRule()],
+          }),
+        ],
+      } as never,
+      'user-1',
+    );
+
+    expect(prisma.equipmentPlanAssignment.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          siteId: { not: baseSite.id },
+        }),
+      }),
+    );
+  });
+
+  it('converts a database slot race into a planning conflict', async () => {
+    const vehicle = fleetVehicle('dump-1');
+    const prisma = createPrismaMock({
+      fleetVehicle: {
+        findMany: jest.fn().mockResolvedValue([vehicle]),
+      },
+    });
+    const prismaConflict = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed',
+      {
+        code: 'P2002',
+        clientVersion: 'test',
+      },
+    );
+    prisma.__tx.equipmentPlanAssignment.create.mockRejectedValueOnce(
+      prismaConflict,
+    );
+    const service = new EquipmentPlansService(prisma as never);
+
+    await expect(
+      service.applyDraft(
+        {
+          ...baseDto,
+          stages: [
+            draftStage({
+              name: 'Подвоз смеси',
+              equipmentRules: [equipmentRule()],
+            }),
+          ],
+        } as never,
+        'user-1',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('EquipmentPlansService coverage and reset', () => {
+  it('shows a deficit when a required unit is missing on part of a stage', async () => {
+    const demand = demandRecord();
+    const prisma = createPrismaMock({
+      equipmentDemand: {
+        findMany: jest.fn().mockResolvedValue([demand]),
+      },
+      equipmentPlanAssignment: {
+        findMany: jest.fn().mockResolvedValue([
+          planRecord({
+            workDate: new Date('2026-06-10T00:00:00.000Z'),
+          }),
+        ]),
+      },
+      fleetVehicle: {
+        groupBy: jest
+          .fn()
+          .mockResolvedValue([{ type: 'dump_truck', _count: { _all: 1 } }]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const [coverage] = await service.getCoverage({ siteId: baseSite.id });
+
+    expect(coverage.assignedCount).toBe(0);
+    expect(coverage.deficit).toBe(1);
+    expect(coverage.coveragePercent).toBe(0);
+  });
+
+  it('excludes plan assignments blocked by a scheduled service window from coverage', async () => {
+    const demand = demandRecord({
+      stage: stageRecord({
+        startDate: new Date('2026-06-10T00:00:00.000Z'),
+        endDate: new Date('2026-06-10T00:00:00.000Z'),
+      }),
+    });
+    const prisma = createPrismaMock({
+      equipmentDemand: {
+        findMany: jest.fn().mockResolvedValue([demand]),
+      },
+      equipmentPlanAssignment: {
+        findMany: jest.fn().mockResolvedValue([planRecord()]),
+      },
+      fleetVehicle: {
+        groupBy: jest
+          .fn()
+          .mockResolvedValue([{ type: 'dump_truck', _count: { _all: 1 } }]),
+      },
+      fleetServiceEvent: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            vehicleId: 'dump-1',
+            startDate: new Date('2026-06-10T00:00:00.000Z'),
+            endDate: new Date('2026-06-10T00:00:00.000Z'),
+            dueAt: null,
+            createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          },
+        ]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const [coverage] = await service.getCoverage({ siteId: baseSite.id });
+
+    expect(coverage.assignedCount).toBe(0);
+    expect(coverage.deficit).toBe(1);
+  });
+
+  it('resets a site plan with assignments, demands, and stages in one transaction', async () => {
+    const prisma = createPrismaMock();
+    prisma.__tx.equipmentPlanAssignment.deleteMany.mockResolvedValueOnce({
+      count: 6,
+    });
+    prisma.__tx.equipmentDemand.deleteMany.mockResolvedValueOnce({ count: 2 });
+    prisma.__tx.roadWorkStage.deleteMany.mockResolvedValueOnce({ count: 3 });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const result = await service.resetSitePlan(baseSite.id);
+
+    expect(result).toEqual({
+      siteId: baseSite.id,
+      deletedAssignments: 6,
+      deletedDemands: 2,
+      deletedStages: 3,
+    });
+    expect(prisma.__tx.equipmentPlanAssignment.deleteMany).toHaveBeenCalledWith(
+      {
+        where: { siteId: baseSite.id },
+      },
+    );
+    expect(prisma.__tx.equipmentDemand.deleteMany).toHaveBeenCalledWith({
+      where: { siteId: baseSite.id },
+    });
+    expect(prisma.__tx.roadWorkStage.deleteMany).toHaveBeenCalledWith({
+      where: { siteId: baseSite.id },
+    });
+  });
+});
+
+describe('EquipmentPlansService manual assignments', () => {
+  it('rejects manual assignment when the selected vehicle has a service window', async () => {
+    const vehicle = fleetVehicle('dump-1');
+    const prisma = createPrismaMock({
+      fleetVehicle: {
+        findUnique: jest.fn().mockResolvedValue(vehicle),
+      },
+      fleetServiceEvent: {
+        findFirst: jest.fn().mockResolvedValue({
+          title: 'Плановое ТО самосвала',
+          startDate: new Date('2026-06-10T00:00:00.000Z'),
+          endDate: new Date('2026-06-11T00:00:00.000Z'),
+          dueAt: null,
+        }),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    await expect(
+      service.create(
+        {
+          siteId: baseSite.id,
+          vehicleId: vehicle.id,
+          workDate: '2026-06-10',
+          shift: 'day',
+          plannedHours: 8,
+        } as never,
+        'user-1',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.equipmentPlanAssignment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects moving an existing assignment onto a service window', async () => {
+    const vehicle = fleetVehicle('dump-1');
+    const prisma = createPrismaMock({
+      equipmentPlanAssignment: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'plan-1',
+          siteId: baseSite.id,
+          stageId: null,
+          demandId: null,
+          vehicleId: vehicle.id,
+          workDate: new Date('2026-06-09T00:00:00.000Z'),
+          shift: 'day',
+        }),
+        update: jest.fn(),
+      },
+      fleetVehicle: {
+        findUnique: jest.fn().mockResolvedValue(vehicle),
+      },
+      fleetServiceEvent: {
+        findFirst: jest.fn().mockResolvedValue({
+          title: 'Ремонт гидросистемы',
+          startDate: new Date('2026-06-10T00:00:00.000Z'),
+          endDate: new Date('2026-06-12T00:00:00.000Z'),
+          dueAt: null,
+        }),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    await expect(
+      service.update('plan-1', {
+        workDate: '2026-06-10',
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.equipmentPlanAssignment.update).not.toHaveBeenCalled();
   });
 });

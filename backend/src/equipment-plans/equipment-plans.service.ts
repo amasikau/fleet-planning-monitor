@@ -331,6 +331,13 @@ export interface AppliedEquipmentPlanDraftView {
   draft: EquipmentPlanDraftView;
 }
 
+export interface ResetEquipmentPlanView {
+  siteId: string;
+  deletedStages: number;
+  deletedDemands: number;
+  deletedAssignments: number;
+}
+
 @Injectable()
 export class EquipmentPlansService {
   constructor(private readonly prisma: PrismaService) {}
@@ -416,6 +423,16 @@ export class EquipmentPlansService {
         {
           startDate: null,
           dueAt: { gte: startDate, lte: endDate },
+        },
+        {
+          startDate: { lte: endDate },
+          endDate: null,
+          dueAt: { gte: startDate },
+        },
+        {
+          startDate: { gte: startDate, lte: endDate },
+          endDate: null,
+          dueAt: null,
         },
       ],
     };
@@ -1628,136 +1645,148 @@ export class EquipmentPlansService {
       ).forEach((key) => occupied.add(key));
     });
 
-    await this.prisma.$transaction(async (tx) => {
-      if (dto.replaceExisting) {
-        await tx.equipmentPlanAssignment.deleteMany({
-          where: { siteId: draft.siteId },
-        });
-        await tx.equipmentDemand.deleteMany({
-          where: { siteId: draft.siteId },
-        });
-        await tx.roadWorkStage.deleteMany({
-          where: { siteId: draft.siteId },
-        });
-      }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (dto.replaceExisting) {
+          await tx.equipmentPlanAssignment.deleteMany({
+            where: { siteId: draft.siteId },
+          });
+          await tx.equipmentDemand.deleteMany({
+            where: { siteId: draft.siteId },
+          });
+          await tx.roadWorkStage.deleteMany({
+            where: { siteId: draft.siteId },
+          });
+        }
 
-      for (const stage of draft.stages) {
-        const createdStage = await tx.roadWorkStage.create({
-          data: {
-            siteId: draft.siteId,
-            type: stage.type,
-            name: stage.name,
-            startDate: new Date(stage.startDate),
-            endDate: new Date(stage.endDate),
-            status: 'planned',
-            notes:
-              stage.notes ||
-              `Создано мастером планирования по виду работ "${draft.workTypeName}".`,
-          },
-        });
-
-        for (const demand of stage.demands) {
-          const createdDemand = await tx.equipmentDemand.create({
+        for (const stage of draft.stages) {
+          const createdStage = await tx.roadWorkStage.create({
             data: {
               siteId: draft.siteId,
-              stageId: createdStage.id,
-              vehicleType: demand.vehicleType,
-              requiredCount: demand.requiredCount,
-              plannedHours: demand.plannedHours,
-              priority: demand.priority,
-              notes: `${demand.calculationNote}${demand.notes ? ` ${demand.notes}` : ''}`,
+              type: stage.type,
+              name: stage.name,
+              startDate: new Date(stage.startDate),
+              endDate: new Date(stage.endDate),
+              status: 'planned',
+              notes:
+                stage.notes ||
+                `Создано мастером планирования по виду работ "${draft.workTypeName}".`,
             },
           });
-          createdDemands += 1;
 
-          if (!createAssignments) continue;
+          for (const demand of stage.demands) {
+            const createdDemand = await tx.equipmentDemand.create({
+              data: {
+                siteId: draft.siteId,
+                stageId: createdStage.id,
+                vehicleType: demand.vehicleType,
+                requiredCount: demand.requiredCount,
+                plannedHours: demand.plannedHours,
+                priority: demand.priority,
+                notes: `${demand.calculationNote}${demand.notes ? ` ${demand.notes}` : ''}`,
+              },
+            });
+            createdDemands += 1;
 
-          for (const workDate of this.daysBetweenInclusive(
-            new Date(stage.startDate),
-            new Date(stage.endDate),
-          )) {
-            const selectedVehicleIds = selectedAssignments.get(
-              `${stage.sequence}:${demand.vehicleType}`,
-            );
-            const sourceVehicles = selectedVehicleIds?.length
-              ? eligibleVehicles.filter(
-                  (vehicle) =>
-                    selectedVehicleIds.includes(vehicle.id) &&
-                    vehicle.type === demand.vehicleType,
-                )
-              : eligibleVehicles
-                  .filter((vehicle) => vehicle.type === demand.vehicleType)
-                  .sort((a, b) => {
-                    return a.id.localeCompare(b.id);
-                  });
+            if (!createAssignments) continue;
 
-            if (selectedVehicleIds?.length) {
-              if (selectedVehicleIds.length < demand.requiredCount) {
-                throw new ConflictException(
-                  'Выбрано меньше единиц техники, чем требуется по расчёту этапа.',
-                );
-              }
-
-              const missingSelected = selectedVehicleIds.filter(
-                (id) => !sourceVehicles.some((vehicle) => vehicle.id === id),
+            for (const workDate of this.daysBetweenInclusive(
+              new Date(stage.startDate),
+              new Date(stage.endDate),
+            )) {
+              const selectedVehicleIds = selectedAssignments.get(
+                `${stage.sequence}:${demand.vehicleType}`,
               );
-              if (missingSelected.length > 0) {
-                throw new ConflictException(
-                  'Выбранная техника недоступна, находится не в рабочем статусе или не соответствует требуемому типу.',
-                );
-              }
-
-              const busySelected = sourceVehicles.filter((vehicle) =>
-                occupied.has(this.planSlotKey(vehicle.id, workDate, 'day')),
-              );
-              if (busySelected.length > 0) {
-                const busyLabels = busySelected
-                  .map(
+              const sourceVehicles = selectedVehicleIds?.length
+                ? eligibleVehicles.filter(
                     (vehicle) =>
-                      `${vehicle.brand} ${vehicle.model} ${vehicle.plateNumber}`,
+                      selectedVehicleIds.includes(vehicle.id) &&
+                      vehicle.type === demand.vehicleType,
                   )
-                  .join(', ');
-                throw new ConflictException(
-                  `Выбранная техника уже занята ${this.dateKey(workDate)}: ${busyLabels}. Выберите другую технику или сдвиньте этап.`,
+                : eligibleVehicles
+                    .filter((vehicle) => vehicle.type === demand.vehicleType)
+                    .sort((a, b) => {
+                      return a.id.localeCompare(b.id);
+                    });
+
+              if (selectedVehicleIds?.length) {
+                if (selectedVehicleIds.length < demand.requiredCount) {
+                  throw new ConflictException(
+                    'Выбрано меньше единиц техники, чем требуется по расчёту этапа.',
+                  );
+                }
+
+                const missingSelected = selectedVehicleIds.filter(
+                  (id) => !sourceVehicles.some((vehicle) => vehicle.id === id),
                 );
+                if (missingSelected.length > 0) {
+                  throw new ConflictException(
+                    'Выбранная техника недоступна, находится не в рабочем статусе или не соответствует требуемому типу.',
+                  );
+                }
+
+                const busySelected = sourceVehicles.filter((vehicle) =>
+                  occupied.has(this.planSlotKey(vehicle.id, workDate, 'day')),
+                );
+                if (busySelected.length > 0) {
+                  const busyLabels = busySelected
+                    .map(
+                      (vehicle) =>
+                        `${vehicle.brand} ${vehicle.model} ${vehicle.plateNumber}`,
+                    )
+                    .join(', ');
+                  throw new ConflictException(
+                    `Выбранная техника уже занята ${this.dateKey(workDate)}: ${busyLabels}. Выберите другую технику или сдвиньте этап.`,
+                  );
+                }
               }
-            }
 
-            const assignedForDate = sourceVehicles
-              .filter((vehicle) => {
+              const assignedForDate = sourceVehicles
+                .filter((vehicle) => {
+                  const key = this.planSlotKey(vehicle.id, workDate, 'day');
+                  return !occupied.has(key);
+                })
+                .slice(0, demand.requiredCount);
+
+              skippedAssignments += Math.max(
+                demand.requiredCount - assignedForDate.length,
+                0,
+              );
+
+              for (const vehicle of assignedForDate) {
                 const key = this.planSlotKey(vehicle.id, workDate, 'day');
-                return !occupied.has(key);
-              })
-              .slice(0, demand.requiredCount);
-
-            skippedAssignments += Math.max(
-              demand.requiredCount - assignedForDate.length,
-              0,
-            );
-
-            for (const vehicle of assignedForDate) {
-              const key = this.planSlotKey(vehicle.id, workDate, 'day');
-              occupied.add(key);
-              await tx.equipmentPlanAssignment.create({
-                data: {
-                  siteId: draft.siteId,
-                  stageId: createdStage.id,
-                  demandId: createdDemand.id,
-                  vehicleId: vehicle.id,
-                  workDate,
-                  shift: 'day',
-                  plannedHours: demand.plannedHours,
-                  status: 'planned',
-                  notes: `Автоматическое назначение по мастеру: ${stage.name}.`,
-                  createdById,
-                },
-              });
-              createdAssignments += 1;
+                occupied.add(key);
+                await tx.equipmentPlanAssignment.create({
+                  data: {
+                    siteId: draft.siteId,
+                    stageId: createdStage.id,
+                    demandId: createdDemand.id,
+                    vehicleId: vehicle.id,
+                    workDate,
+                    shift: 'day',
+                    plannedHours: demand.plannedHours,
+                    status: 'planned',
+                    notes: `Автоматическое назначение по мастеру: ${stage.name}.`,
+                    createdById,
+                  },
+                });
+                createdAssignments += 1;
+              }
             }
           }
         }
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Одна из единиц техники уже занята в выбранные даты. Обновите план-график и повторите расчёт.',
+        );
       }
-    });
+      throw error;
+    }
 
     return {
       createdStages: draft.stages.length,
@@ -1765,6 +1794,33 @@ export class EquipmentPlansService {
       createdAssignments,
       skippedAssignments,
       draft,
+    };
+  }
+
+  async resetSitePlan(siteId: string): Promise<ResetEquipmentPlanView> {
+    const site = await this.assertSite(siteId);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const deletedAssignments = await tx.equipmentPlanAssignment.deleteMany({
+        where: { siteId: site.id },
+      });
+      const deletedDemands = await tx.equipmentDemand.deleteMany({
+        where: { siteId: site.id },
+      });
+      const deletedStages = await tx.roadWorkStage.deleteMany({
+        where: { siteId: site.id },
+      });
+
+      return {
+        deletedAssignments: deletedAssignments.count,
+        deletedDemands: deletedDemands.count,
+        deletedStages: deletedStages.count,
+      };
+    });
+
+    return {
+      siteId: site.id,
+      ...result,
     };
   }
 
@@ -2044,6 +2100,46 @@ export class EquipmentPlansService {
     const availableMap = new Map<FleetVehicleType, number>(
       availableByType.map((item) => [item.type, item._count._all]),
     );
+    const coverageBoundaryDates = [
+      ...demands.flatMap((demand) =>
+        demand.stage ? [demand.stage.startDate, demand.stage.endDate] : [],
+      ),
+      ...plans.map((plan) => plan.workDate),
+    ];
+    const coverageStartDate =
+      coverageBoundaryDates.length > 0
+        ? new Date(
+            Math.min(...coverageBoundaryDates.map((date) => date.getTime())),
+          )
+        : null;
+    const coverageEndDate =
+      coverageBoundaryDates.length > 0
+        ? new Date(
+            Math.max(...coverageBoundaryDates.map((date) => date.getTime())),
+          )
+        : null;
+    const blockingServices =
+      coverageStartDate && coverageEndDate
+        ? await this.prisma.fleetServiceEvent.findMany({
+            where: this.serviceBlockingWhere(
+              coverageStartDate,
+              coverageEndDate,
+            ),
+            select: {
+              vehicleId: true,
+              startDate: true,
+              endDate: true,
+              dueAt: true,
+              createdAt: true,
+            },
+          })
+        : [];
+    const isBlockedByService = (vehicleId: string, workDate: Date) =>
+      blockingServices.some(
+        (event) =>
+          event.vehicleId === vehicleId &&
+          this.serviceOverlapsDate(event, workDate),
+      );
 
     return demands.map((demand) => {
       const matchingPlans = plans.filter((plan) => {
@@ -2054,6 +2150,7 @@ export class EquipmentPlansService {
         ) {
           return false;
         }
+        if (isBlockedByService(plan.vehicleId, plan.workDate)) return false;
         if (plan.vehicle.type !== demand.vehicleType) return false;
         if (plan.demandId === demand.id) return true;
         if (plan.siteId !== demand.siteId) return false;
@@ -2061,10 +2158,29 @@ export class EquipmentPlansService {
         return plan.demandId == null;
       });
 
-      const assignedVehicles = new Set(
-        matchingPlans.map((plan) => plan.vehicleId),
-      );
-      const assignedCount = assignedVehicles.size;
+      const stageDates = demand.stage
+        ? this.daysBetweenInclusive(
+            demand.stage.startDate,
+            demand.stage.endDate,
+          )
+        : [];
+      const assignedCount =
+        stageDates.length > 0
+          ? Math.min(
+              ...stageDates.map(
+                (workDate) =>
+                  new Set(
+                    matchingPlans
+                      .filter(
+                        (plan) =>
+                          this.dateKey(plan.workDate) ===
+                          this.dateKey(workDate),
+                      )
+                      .map((plan) => plan.vehicleId),
+                  ).size,
+              ),
+            )
+          : new Set(matchingPlans.map((plan) => plan.vehicleId)).size;
       const assignedPlannedHours = matchingPlans.reduce(
         (sum, plan) => sum + plan.plannedHours,
         0,

@@ -206,6 +206,20 @@ function datesBetween(startDate: string, endDate: string) {
   return result
 }
 
+function getServiceEventRange(event: ServiceEvent) {
+  const startDate = event.startDate ?? event.dueAt
+  const endDate = event.endDate ?? event.dueAt ?? startDate
+
+  if (!startDate || !endDate) return null
+
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  start.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+
+  return { start, end }
+}
+
 function vehicleLabel(
   vehicle: Pick<FleetVehicle, "brand" | "model" | "plateNumber">
 ) {
@@ -224,7 +238,10 @@ function scaleTemplateStages(
   template: RoadWorkTypeTemplate,
   lengthKm: number
 ): DraftStage[] {
-  const scale = Math.max(0.6, lengthKm / Math.max(template.defaultLengthKm, 0.1))
+  const scale = Math.max(
+    0.6,
+    lengthKm / Math.max(template.defaultLengthKm, 0.1)
+  )
 
   return template.stageTemplates.map((stage, index) => ({
     id: stage.id,
@@ -337,7 +354,8 @@ function getTimelineDays(range: NonNullable<ReturnType<typeof getDateRange>>) {
 }
 
 function getTimelineMonths(days: Date[]) {
-  const months: { key: string; label: string; start: number; span: number }[] = []
+  const months: { key: string; label: string; start: number; span: number }[] =
+    []
 
   days.forEach((day, index) => {
     const key = `${day.getFullYear()}-${day.getMonth()}`
@@ -427,7 +445,13 @@ function buildDefaultSelections(
   return result
 }
 
-function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: string }) {
+function GanttChart({
+  tasks,
+  emptyText,
+}: {
+  tasks: GanttTask[]
+  emptyText: string
+}) {
   const range = useMemo(() => getDateRange(tasks), [tasks])
   const days = useMemo(() => (range ? getTimelineDays(range) : []), [range])
   const months = useMemo(() => getTimelineMonths(days), [days])
@@ -461,7 +485,7 @@ function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: strin
                 index % 2 === 0 ? "bg-background" : "bg-muted/15"
               )}
             >
-              <div className="flex items-center justify-center border-r text-xs tabular-nums text-muted-foreground">
+              <div className="flex items-center justify-center border-r text-xs text-muted-foreground tabular-nums">
                 {index + 1}
               </div>
               <div className="flex min-w-0 flex-col justify-center border-r px-3">
@@ -472,10 +496,10 @@ function GanttChart({ tasks, emptyText }: { tasks: GanttTask[]; emptyText: strin
                   </p>
                 )}
               </div>
-              <div className="flex items-center border-r px-3 text-xs tabular-nums text-muted-foreground">
+              <div className="flex items-center border-r px-3 text-xs text-muted-foreground tabular-nums">
                 {formatShortDate(task.startDate)}
               </div>
-              <div className="flex items-center px-3 text-xs tabular-nums text-muted-foreground">
+              <div className="flex items-center px-3 text-xs text-muted-foreground tabular-nums">
                 {getTaskDurationDays(task)}
               </div>
             </div>
@@ -647,7 +671,8 @@ function StageEditorDialog({
         <DialogHeader>
           <DialogTitle>{stage ? "Изменение этапа" : "Новый этап"}</DialogTitle>
           <DialogDescription>
-            Правка действует только для текущего расчёта. База шаблонов не меняется.
+            Правка действует только для текущего расчёта. База шаблонов не
+            меняется.
           </DialogDescription>
         </DialogHeader>
 
@@ -666,7 +691,10 @@ function StageEditorDialog({
             <Select
               value={form.type}
               onValueChange={(value) =>
-                setForm((prev) => ({ ...prev, type: value as RoadWorkStageType }))
+                setForm((prev) => ({
+                  ...prev,
+                  type: value as RoadWorkStageType,
+                }))
               }
             >
               <SelectTrigger className="w-full">
@@ -702,7 +730,10 @@ function StageEditorDialog({
               min={1}
               value={form.durationDays}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, durationDays: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  durationDays: event.target.value,
+                }))
               }
             />
           </Field>
@@ -780,7 +811,11 @@ function StageEditorDialog({
         </FieldGroup>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+          >
             Отмена
           </Button>
           <Button size="sm" onClick={handleSave}>
@@ -803,8 +838,14 @@ function SortableStageCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: stage.id })
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id })
 
   return (
     <div
@@ -837,7 +878,10 @@ function SortableStageCard({
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {stage.equipmentRules.map((rule, ruleIndex) => (
-                <Badge key={`${rule.vehicleType}-${ruleIndex}`} variant="outline">
+                <Badge
+                  key={`${rule.vehicleType}-${ruleIndex}`}
+                  variant="outline"
+                >
                   {FLEET_VEHICLE_TYPE_LABELS[rule.vehicleType]} ·{" "}
                   {EQUIPMENT_CALCULATION_KIND_LABELS[rule.calculationKind]}
                 </Badge>
@@ -918,7 +962,9 @@ function PlanWizardDialog({
   const handleLengthChange = (value: string) => {
     setLengthKm(value)
     if (workType) {
-      setStages(scaleTemplateStages(workType, Number(value) || workType.defaultLengthKm))
+      setStages(
+        scaleTemplateStages(workType, Number(value) || workType.defaultLengthKm)
+      )
     }
     setDraft(null)
     setSelectedVehicles({})
@@ -1021,13 +1067,7 @@ function PlanWizardDialog({
       const result = await api.equipmentPlans.generateDraft(buildPayload())
       setPlanningPlans(latestPlans)
       setDraft(result)
-      setSelectedVehicles(
-        buildDefaultSelections(
-          result,
-          vehicles,
-          latestPlans
-        )
-      )
+      setSelectedVehicles(buildDefaultSelections(result, vehicles, latestPlans))
       setStep(2)
     } catch (error) {
       toast.error(getErrorMessage(error, "Не удалось рассчитать план"))
@@ -1088,7 +1128,9 @@ function PlanWizardDialog({
       syncStagesFromDraft(result)
 
       if (afterShortage === 0) {
-        toast.success("Этапы сдвинуты, свободная техника назначена автоматически")
+        toast.success(
+          "Этапы сдвинуты, свободная техника назначена автоматически"
+        )
       } else if (beforeShortage && afterShortage < beforeShortage) {
         toast.warning(
           "Часть дефицита закрыта автоматическим сдвигом. По оставшейся потребности свободной техники нет."
@@ -1099,7 +1141,9 @@ function PlanWizardDialog({
         )
       }
     } catch (error) {
-      toast.error(getErrorMessage(error, "Не удалось автоматически сдвинуть этапы"))
+      toast.error(
+        getErrorMessage(error, "Не удалось автоматически сдвинуть этапы")
+      )
     } finally {
       setLoading(false)
     }
@@ -1206,7 +1250,8 @@ function PlanWizardDialog({
                 <div>
                   <p className="text-sm font-medium">Конструктор этапов</p>
                   <p className="text-sm text-muted-foreground">
-                    Перетаскивайте этапы, меняйте длительность и требуемую технику.
+                    Перетаскивайте этапы, меняйте длительность и требуемую
+                    технику.
                   </p>
                 </div>
                 <Button
@@ -1255,7 +1300,8 @@ function PlanWizardDialog({
               <CardHeader>
                 <CardTitle>Черновая диаграмма Ганта</CardTitle>
                 <CardDescription>
-                  Длительность этапов рассчитывается из протяжённости и шаблона вида работ.
+                  Длительность этапов рассчитывается из протяжённости и шаблона
+                  вида работ.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1297,7 +1343,8 @@ function PlanWizardDialog({
               <div className="rounded-lg border p-6">
                 <p className="text-sm font-medium">Расчёт ещё не выполнен</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Нажмите `Рассчитать`, чтобы получить этапы, потребность и свободную технику.
+                  Нажмите `Рассчитать`, чтобы получить этапы, потребность и
+                  свободную технику.
                 </p>
               </div>
             ) : (
@@ -1307,7 +1354,8 @@ function PlanWizardDialog({
                     <div>
                       <p className="text-sm font-medium">{stage.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDate(stage.startDate)} - {formatDate(stage.endDate)}
+                        {formatDate(stage.startDate)} -{" "}
+                        {formatDate(stage.endDate)}
                       </p>
                     </div>
                     <Badge variant="secondary">
@@ -1317,7 +1365,10 @@ function PlanWizardDialog({
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
                     {stage.demands.map((demand) => {
                       const key = demandKey(stage.sequence, demand.vehicleType)
-                      const workDates = datesBetween(stage.startDate, stage.endDate)
+                      const workDates = datesBetween(
+                        stage.startDate,
+                        stage.endDate
+                      )
                       const candidates =
                         demand.availableVehicles ??
                         vehicles
@@ -1383,12 +1434,17 @@ function PlanWizardDialog({
                                     const current = selectedVehicles[key] ?? []
                                     const exists = current.includes(vehicle.id)
                                     const next = exists
-                                      ? current.filter((id) => id !== vehicle.id)
+                                      ? current.filter(
+                                          (id) => id !== vehicle.id
+                                        )
                                       : current.length < demand.requiredCount
                                         ? [...current, vehicle.id]
                                         : current
 
-                                    if (!exists && current.length >= demand.requiredCount) {
+                                    if (
+                                      !exists &&
+                                      current.length >= demand.requiredCount
+                                    ) {
                                       toast.warning(
                                         `Для этапа нужно ${demand.requiredCount} ед. техники`
                                       )
@@ -1458,12 +1514,15 @@ function PlanWizardDialog({
                       return (
                         <div key={key} className="rounded-md border p-3">
                           <p className="text-sm font-medium">
-                            {stage.name} · {FLEET_VEHICLE_TYPE_LABELS[demand.vehicleType]}
+                            {stage.name} ·{" "}
+                            {FLEET_VEHICLE_TYPE_LABELS[demand.vehicleType]}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {selected
                               .map((id) => {
-                                const vehicle = vehicles.find((item) => item.id === id)
+                                const vehicle = vehicles.find(
+                                  (item) => item.id === id
+                                )
                                 return vehicle ? vehicleLabel(vehicle) : null
                               })
                               .filter(Boolean)
@@ -1513,7 +1572,11 @@ function PlanWizardDialog({
             >
               Рассчитать
             </Button>
-            <Button size="sm" onClick={handleFinalSave} disabled={!draft || loading}>
+            <Button
+              size="sm"
+              onClick={handleFinalSave}
+              disabled={!draft || loading}
+            >
               Спланировать итогово
             </Button>
           </div>
@@ -1559,7 +1622,7 @@ function ObjectSidebar({
               )}
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium leading-snug">{site.name}</p>
+                <p className="text-sm leading-snug font-medium">{site.name}</p>
                 <Badge variant={count > 0 ? "default" : "secondary"}>
                   {count > 0 ? "План" : "Нет"}
                 </Badge>
@@ -1581,12 +1644,16 @@ function SavedPlanView({
   plans,
   serviceEvents,
   onPlanClick,
+  onResetPlan,
+  resetLoading,
 }: {
   site: ConstructionSite
   stages: RoadWorkStage[]
   plans: EquipmentPlan[]
   serviceEvents: ServiceEvent[]
   onPlanClick: () => void
+  onResetPlan: () => void
+  resetLoading: boolean
 }) {
   const tasks = getStageTasksFromSaved(stages)
   const plannedVehicleIds = new Set(plans.map((plan) => plan.vehicleId))
@@ -1594,15 +1661,17 @@ function SavedPlanView({
   const serviceRisks = serviceEvents.filter((event) => {
     if (event.status === "completed") return false
     if (!plannedVehicleIds.has(event.vehicleId)) return false
-    if (event.status === "in_progress" || event.status === "overdue") return true
-    if (!event.dueAt || !range) return event.type === "repair"
+    if (event.status === "in_progress" || event.status === "overdue")
+      return true
+    if (!range) return event.type === "repair"
 
-    const dueAt = new Date(event.dueAt)
+    const serviceRange = getServiceEventRange(event)
+    if (!serviceRange) return event.type === "repair"
     const dayMs = 24 * 60 * 60 * 1000
-    return (
-      dueAt >= new Date(range.min.getTime() - 3 * dayMs) &&
-      dueAt <= new Date(range.max.getTime() + 3 * dayMs)
-    )
+    const riskStart = new Date(range.min.getTime() - 3 * dayMs)
+    const riskEnd = new Date(range.max.getTime() + 3 * dayMs)
+
+    return serviceRange.end >= riskStart && serviceRange.start <= riskEnd
   })
 
   if (tasks.length === 0) {
@@ -1610,14 +1679,24 @@ function SavedPlanView({
       <Card>
         <CardHeader>
           <CardTitle>{site.name}</CardTitle>
-          <CardDescription>
-            План по объекту ещё не создан.
-          </CardDescription>
+          <CardDescription>План по объекту ещё не создан.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button size="sm" onClick={onPlanClick}>
-            Спланировать
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={onPlanClick}>
+              Спланировать
+            </Button>
+            {plans.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onResetPlan}
+                disabled={resetLoading}
+              >
+                Сбросить
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     )
@@ -1633,9 +1712,19 @@ function SavedPlanView({
               {site.workType} · {plans.length} смен техники
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={onPlanClick}>
-            Перерассчитать
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={onPlanClick}>
+              Перерассчитать
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onResetPlan}
+              disabled={resetLoading}
+            >
+              Сбросить
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div>
@@ -1644,7 +1733,10 @@ function SavedPlanView({
               Сроки этапов объекта и пересечения работ на общей временной шкале.
             </p>
           </div>
-          <GanttChart tasks={tasks} emptyText="План по объекту ещё не создан." />
+          <GanttChart
+            tasks={tasks}
+            emptyText="План по объекту ещё не создан."
+          />
         </CardContent>
       </Card>
 
@@ -1669,7 +1761,9 @@ function SavedPlanView({
               <TableBody>
                 {plans.map((plan) => (
                   <TableRow key={plan.id}>
-                    <TableCell className="pl-6">{formatDate(plan.workDate)}</TableCell>
+                    <TableCell className="pl-6">
+                      {formatDate(plan.workDate)}
+                    </TableCell>
                     <TableCell>{plan.stageName ?? "Без этапа"}</TableCell>
                     <TableCell>{plan.vehicleLabel}</TableCell>
                     <TableCell>{plan.plannedHours}</TableCell>
@@ -1725,6 +1819,7 @@ export default function PlanningPage() {
   const [selectedSiteId, setSelectedSiteId] = useState("")
   const [planningOpen, setPlanningOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [resettingPlan, setResettingPlan] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -1760,14 +1855,37 @@ export default function PlanningPage() {
     void fetchData()
   }, [fetchData])
 
-  const selectedSite =
-    sites.find((site) => site.id === selectedSiteId) ?? null
-  const selectedStages = stages.filter((stage) => stage.siteId === selectedSiteId)
+  const handleResetPlan = async () => {
+    if (!selectedSiteId) return
+    const confirmed = window.confirm(
+      "Сбросить план выбранного объекта? Будут удалены этапы, потребности и назначения техники."
+    )
+    if (!confirmed) return
+
+    try {
+      setResettingPlan(true)
+      await api.equipmentPlans.resetSitePlan(selectedSiteId)
+      setPlanningOpen(false)
+      await fetchData()
+      toast.success("План объекта сброшен")
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Не удалось сбросить план"))
+    } finally {
+      setResettingPlan(false)
+    }
+  }
+
+  const selectedSite = sites.find((site) => site.id === selectedSiteId) ?? null
+  const selectedStages = stages.filter(
+    (stage) => stage.siteId === selectedSiteId
+  )
   const selectedPlans = plans.filter((plan) => plan.siteId === selectedSiteId)
   const hasSelectedPlan = planExists(selectedStages, selectedPlans)
   const stagesBySite = useMemo(() => {
     const map = new Map<string, number>()
-    stages.forEach((stage) => map.set(stage.siteId, (map.get(stage.siteId) ?? 0) + 1))
+    stages.forEach((stage) =>
+      map.set(stage.siteId, (map.get(stage.siteId) ?? 0) + 1)
+    )
     return map
   }, [stages])
 
@@ -1787,7 +1905,8 @@ export default function PlanningPage() {
       <div className="px-4 lg:px-6">
         <h1 className="text-2xl font-bold">Планы, графики и база работ</h1>
         <p className="text-sm text-muted-foreground">
-          Планирование начинается с выбора объекта, затем мастер строит этапы, технику и итоговый график.
+          Планирование начинается с выбора объекта, затем мастер строит этапы,
+          технику и итоговый график.
         </p>
       </div>
 
@@ -1820,7 +1939,8 @@ export default function PlanningPage() {
                   <CardHeader>
                     <CardTitle>Объект не выбран</CardTitle>
                     <CardDescription>
-                      Слева выберите объект. До выбора объекта графики не отображаются.
+                      Слева выберите объект. До выбора объекта графики не
+                      отображаются.
                     </CardDescription>
                   </CardHeader>
                 </Card>
@@ -1831,6 +1951,8 @@ export default function PlanningPage() {
                   plans={selectedPlans}
                   serviceEvents={serviceEvents}
                   onPlanClick={() => setPlanningOpen(true)}
+                  onResetPlan={handleResetPlan}
+                  resetLoading={resettingPlan}
                 />
               )}
             </div>
