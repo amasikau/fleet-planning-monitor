@@ -64,11 +64,7 @@ export const FLEET_VEHICLE_STATUS_LABELS: Record<FleetVehicleStatus, string> = {
   repair: "В ремонте",
 }
 
-export type FleetAuditAction =
-  | "create"
-  | "edit"
-  | "delete"
-  | "status_change"
+export type FleetAuditAction = "create" | "edit" | "delete" | "status_change"
 
 export const FLEET_AUDIT_ACTION_LABELS: Record<FleetAuditAction, string> = {
   create: "Создание",
@@ -183,18 +179,19 @@ export type FleetRepairCategory =
   | "diagnostics"
   | "scheduled_service"
 
-export const FLEET_REPAIR_CATEGORY_LABELS: Record<FleetRepairCategory, string> = {
-  engine: "Двигатель",
-  transmission: "Коробка передач",
-  hydraulics: "Гидравлические системы",
-  electrical: "Электрика",
-  chassis: "Ходовая часть",
-  brakes: "Тормозная система",
-  tires: "Шины",
-  working_equipment: "Рабочее оборудование",
-  diagnostics: "Диагностика",
-  scheduled_service: "Плановое ТО",
-}
+export const FLEET_REPAIR_CATEGORY_LABELS: Record<FleetRepairCategory, string> =
+  {
+    engine: "Двигатель",
+    transmission: "Коробка передач",
+    hydraulics: "Гидравлические системы",
+    electrical: "Электрика",
+    chassis: "Ходовая часть",
+    brakes: "Тормозная система",
+    tires: "Шины",
+    working_equipment: "Рабочее оборудование",
+    diagnostics: "Диагностика",
+    scheduled_service: "Плановое ТО",
+  }
 
 export interface RepairTemplate {
   id: string
@@ -283,15 +280,13 @@ export type EquipmentPlanStatus =
   | "completed"
   | "failed"
 
-export const EQUIPMENT_PLAN_STATUS_LABELS: Record<
-  EquipmentPlanStatus,
-  string
-> = {
-  planned: "Запланировано",
-  in_progress: "В работе",
-  completed: "Выполнено",
-  failed: "Срыв",
-}
+export const EQUIPMENT_PLAN_STATUS_LABELS: Record<EquipmentPlanStatus, string> =
+  {
+    planned: "Запланировано",
+    in_progress: "В работе",
+    completed: "Выполнено",
+    failed: "Срыв",
+  }
 
 export type RoadWorkStageType =
   | "survey"
@@ -351,10 +346,7 @@ export const EQUIPMENT_DEMAND_PRIORITY_LABELS: Record<
   critical: "Критическая",
 }
 
-export type EquipmentCalculationKind =
-  | "fixed"
-  | "per_km"
-  | "asphalt_delivery"
+export type EquipmentCalculationKind = "fixed" | "per_km" | "asphalt_delivery"
 
 export const EQUIPMENT_CALCULATION_KIND_LABELS: Record<
   EquipmentCalculationKind,
@@ -472,6 +464,47 @@ export interface AppliedEquipmentPlanDraft {
   createdAssignments: number
   skippedAssignments: number
   draft: EquipmentPlanDraft
+}
+
+export interface ServiceRiskAffectedAssignment {
+  id: string
+  stageId: string | null
+  stageName: string | null
+  vehicleId: string
+  vehicleLabel: string
+  vehicleType: FleetVehicleType
+  workDate: string
+  shift: EquipmentPlanShift
+}
+
+export interface ServiceRiskShiftSuggestion {
+  shiftDays: number
+  shiftedStartDate: string
+  shiftedEndDate: string
+  message: string
+}
+
+export interface ServiceRiskResolution {
+  serviceEventId: string
+  siteId: string
+  hasRisk: boolean
+  serviceTitle: string
+  serviceStartDate: string | null
+  serviceEndDate: string | null
+  affectedVehicleId: string
+  affectedVehicleLabel: string
+  affectedAssignments: ServiceRiskAffectedAssignment[]
+  replacementOptions: EquipmentPlanDraftVehicle[]
+  recommendedAction: "replace" | "shift" | "none"
+  shiftSuggestion: ServiceRiskShiftSuggestion | null
+}
+
+export interface ResolvedServiceRisk {
+  action: "replace" | "shift"
+  updatedAssignments: number
+  shiftedStages: number
+  shiftDays: number
+  resolution: ServiceRiskResolution
 }
 
 export interface EquipmentPlan {

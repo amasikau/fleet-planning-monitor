@@ -25,6 +25,7 @@ import { UpdateEquipmentPlanDto } from './dto/update-equipment-plan.dto';
 import { UpdateRoadWorkStageDto } from './dto/update-road-work-stage.dto';
 import { UpdateRoadWorkStageTemplateDto } from './dto/update-road-work-stage-template.dto';
 import { UpdateRoadWorkTypeTemplateDto } from './dto/update-road-work-type-template.dto';
+import { ResolveServiceRiskDto } from './dto/resolve-service-risk.dto';
 import {
   AppliedEquipmentPlanDraftView,
   EquipmentCoverageView,
@@ -33,7 +34,9 @@ import {
   EquipmentPlanStatsView,
   EquipmentPlanView,
   EquipmentPlansService,
+  ResolvedServiceRiskView,
   ResetEquipmentPlanView,
+  ServiceRiskResolutionView,
   RoadWorkTypeTemplateView,
   RoadWorkStageView,
   RoadWorkStageTemplateView,
@@ -149,6 +152,27 @@ export class EquipmentPlansController {
     @Param('siteId') siteId: string,
   ): Promise<ResetEquipmentPlanView> {
     return this.equipmentPlansService.resetSitePlan(siteId);
+  }
+
+  @Roles('admin', 'user')
+  @Get('service-risks/:serviceEventId')
+  async getServiceRiskResolution(
+    @Param('serviceEventId') serviceEventId: string,
+    @Query('siteId') siteId: string,
+  ): Promise<ServiceRiskResolutionView> {
+    return this.equipmentPlansService.getServiceRiskResolution(
+      serviceEventId,
+      siteId,
+    );
+  }
+
+  @Roles('admin', 'user')
+  @Post('service-risks/:serviceEventId/resolve')
+  async resolveServiceRisk(
+    @Param('serviceEventId') serviceEventId: string,
+    @Body() dto: ResolveServiceRiskDto,
+  ): Promise<ResolvedServiceRiskView> {
+    return this.equipmentPlansService.resolveServiceRisk(serviceEventId, dto);
   }
 
   @Roles('admin', 'user')

@@ -31,6 +31,10 @@ import { UpdateEquipmentPlanDto } from './dto/update-equipment-plan.dto';
 import { UpdateRoadWorkStageDto } from './dto/update-road-work-stage.dto';
 import { UpdateRoadWorkStageTemplateDto } from './dto/update-road-work-stage-template.dto';
 import { UpdateRoadWorkTypeTemplateDto } from './dto/update-road-work-type-template.dto';
+import {
+  ResolveServiceRiskDto,
+  ServiceRiskResolutionAction,
+} from './dto/resolve-service-risk.dto';
 
 const siteSelect = {
   id: true,
@@ -46,6 +50,7 @@ const stageSelect = {
   status: true,
   startDate: true,
   endDate: true,
+  notes: true,
 } satisfies Prisma.RoadWorkStageSelect;
 
 const equipmentPlanInclude = {
@@ -133,6 +138,14 @@ type RoadWorkStageTemplateRecord = Prisma.RoadWorkStageTemplateGetPayload<{
 
 type DraftVehicleRecord = Prisma.FleetVehicleGetPayload<{
   select: typeof draftVehicleSelect;
+}>;
+
+type ServiceRiskEventRecord = Prisma.FleetServiceEventGetPayload<{
+  include: {
+    vehicle: {
+      select: typeof draftVehicleSelect;
+    };
+  };
 }>;
 
 export interface EquipmentPlanView {
@@ -338,6 +351,47 @@ export interface ResetEquipmentPlanView {
   deletedAssignments: number;
 }
 
+export interface ServiceRiskAffectedAssignmentView {
+  id: string;
+  stageId: string | null;
+  stageName: string | null;
+  vehicleId: string;
+  vehicleLabel: string;
+  vehicleType: FleetVehicleType;
+  workDate: string;
+  shift: EquipmentPlanShift;
+}
+
+export interface ServiceRiskShiftSuggestionView {
+  shiftDays: number;
+  shiftedStartDate: string;
+  shiftedEndDate: string;
+  message: string;
+}
+
+export interface ServiceRiskResolutionView {
+  serviceEventId: string;
+  siteId: string;
+  hasRisk: boolean;
+  serviceTitle: string;
+  serviceStartDate: string | null;
+  serviceEndDate: string | null;
+  affectedVehicleId: string;
+  affectedVehicleLabel: string;
+  affectedAssignments: ServiceRiskAffectedAssignmentView[];
+  replacementOptions: EquipmentPlanDraftVehicleView[];
+  recommendedAction: 'replace' | 'shift' | 'none';
+  shiftSuggestion: ServiceRiskShiftSuggestionView | null;
+}
+
+export interface ResolvedServiceRiskView {
+  action: ServiceRiskResolutionAction;
+  updatedAssignments: number;
+  shiftedStages: number;
+  shiftDays: number;
+  resolution: ServiceRiskResolutionView;
+}
+
 @Injectable()
 export class EquipmentPlansService {
   constructor(private readonly prisma: PrismaService) {}
@@ -495,6 +549,41 @@ export class EquipmentPlansService {
       current.setUTCDate(current.getUTCDate() + 1);
     }
     return dates;
+  }
+
+  private diffDays(startDate: Date, endDate: Date) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    return Math.round(
+      (this.normalizeDate(endDate.toISOString()).getTime() -
+        this.normalizeDate(startDate.toISOString()).getTime()) /
+        dayMs,
+    );
+  }
+
+  private planDateRange(plans: { workDate: Date }[]) {
+    if (plans.length === 0) return null;
+    return plans.reduce(
+      (range, plan) => ({
+        min: plan.workDate < range.min ? plan.workDate : range.min,
+        max: plan.workDate > range.max ? plan.workDate : range.max,
+      }),
+      { min: plans[0].workDate, max: plans[0].workDate },
+    );
+  }
+
+  private formatServiceRiskAssignment(
+    plan: EquipmentPlanRecord,
+  ): ServiceRiskAffectedAssignmentView {
+    return {
+      id: plan.id,
+      stageId: plan.stageId,
+      stageName: plan.stage?.name ?? null,
+      vehicleId: plan.vehicleId,
+      vehicleLabel: `${plan.vehicle.brand} ${plan.vehicle.model} · ${plan.vehicle.plateNumber}`,
+      vehicleType: plan.vehicle.type,
+      workDate: plan.workDate.toISOString(),
+      shift: plan.shift,
+    };
   }
 
   private formatWorkType(
@@ -1005,6 +1094,422 @@ export class EquipmentPlansService {
       );
     }
     return demand;
+  }
+
+  private async findServiceRiskEventOrThrow(serviceEventId: string) {
+    const event = await this.prisma.fleetServiceEvent.findUnique({
+      where: { id: serviceEventId },
+      include: {
+        vehicle: {
+          select: draftVehicleSelect,
+        },
+      },
+    });
+    if (!event) throw new NotFoundException('Заявка ТО или ремонта не найдена');
+    return event;
+  }
+
+  private async findAffectedPlansForServiceRisk(
+    event: ServiceRiskEventRecord,
+    siteId: string,
+  ) {
+    const range = this.getServiceDateRange(event);
+    if (!range || event.status === 'completed') return [];
+
+    return this.prisma.equipmentPlanAssignment.findMany({
+      where: {
+        siteId,
+        vehicleId: event.vehicleId,
+        status: { not: 'failed' },
+        workDate: {
+          gte: range.startDate,
+          lte: range.endDate,
+        },
+      },
+      include: equipmentPlanInclude,
+      orderBy: [{ workDate: 'asc' }, { shift: 'asc' }],
+    });
+  }
+
+  private async findReplacementOptionsForServiceRisk(params: {
+    event: ServiceRiskEventRecord;
+    affectedPlans: EquipmentPlanRecord[];
+  }) {
+    const range = this.planDateRange(params.affectedPlans);
+    if (!range) return [];
+
+    const [vehicles, existingPlans, blockingServices] = await Promise.all([
+      this.prisma.fleetVehicle.findMany({
+        where: {
+          id: { not: params.event.vehicleId },
+          type: params.event.vehicle.type,
+          status: { in: ['active', 'reserve'] },
+        },
+        select: draftVehicleSelect,
+      }),
+      this.prisma.equipmentPlanAssignment.findMany({
+        where: {
+          id: { notIn: params.affectedPlans.map((plan) => plan.id) },
+          workDate: {
+            gte: range.min,
+            lte: range.max,
+          },
+          shift: {
+            in: [...new Set(params.affectedPlans.map((plan) => plan.shift))],
+          },
+          status: { not: 'failed' },
+        },
+        select: {
+          vehicleId: true,
+          workDate: true,
+          shift: true,
+        },
+      }),
+      this.prisma.fleetServiceEvent.findMany({
+        where: {
+          vehicleId: { not: params.event.vehicleId },
+          vehicle: { type: params.event.vehicle.type },
+          ...this.serviceBlockingWhere(range.min, range.max),
+        },
+        select: {
+          vehicleId: true,
+          startDate: true,
+          endDate: true,
+          dueAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const occupiedSlots = new Set(
+      existingPlans.map((plan) =>
+        this.planSlotKey(plan.vehicleId, plan.workDate, plan.shift),
+      ),
+    );
+
+    return vehicles
+      .filter((vehicle) =>
+        params.affectedPlans.every((plan) => {
+          const slotKey = this.planSlotKey(
+            vehicle.id,
+            plan.workDate,
+            plan.shift,
+          );
+          const hasServiceBlock = blockingServices.some(
+            (event) =>
+              event.vehicleId === vehicle.id &&
+              this.serviceOverlapsDate(event, plan.workDate),
+          );
+          return !occupiedSlots.has(slotKey) && !hasServiceBlock;
+        }),
+      )
+      .sort((a, b) => this.sortDraftVehicles(a, b))
+      .map((vehicle) => this.formatDraftVehicle(vehicle));
+  }
+
+  private buildServiceRiskShiftSuggestion(
+    event: ServiceRiskEventRecord,
+    affectedPlans: EquipmentPlanRecord[],
+  ): ServiceRiskShiftSuggestionView | null {
+    const serviceRange = this.getServiceDateRange(event);
+    const planRange = this.planDateRange(affectedPlans);
+    if (!serviceRange || !planRange) return null;
+
+    const targetStartDate = this.addDays(serviceRange.endDate, 1);
+    const shiftDays = Math.max(
+      this.diffDays(planRange.min, targetStartDate),
+      1,
+    );
+    const affectedStages = affectedPlans
+      .map((plan) => plan.stage)
+      .filter((stage): stage is NonNullable<EquipmentPlanRecord['stage']> =>
+        Boolean(stage),
+      );
+    const stageStart =
+      affectedStages.length > 0
+        ? affectedStages.reduce(
+            (min, stage) => (stage.startDate < min ? stage.startDate : min),
+            affectedStages[0].startDate,
+          )
+        : planRange.min;
+    const stageEnd =
+      affectedStages.length > 0
+        ? affectedStages.reduce(
+            (max, stage) => (stage.endDate > max ? stage.endDate : max),
+            affectedStages[0].endDate,
+          )
+        : planRange.max;
+    const shiftedStartDate = this.addDays(stageStart, shiftDays);
+    const shiftedEndDate = this.addDays(stageEnd, shiftDays);
+
+    return {
+      shiftDays,
+      shiftedStartDate: shiftedStartDate.toISOString(),
+      shiftedEndDate: shiftedEndDate.toISOString(),
+      message: `Если не переназначить технику, затронутые этапы будут сдвинуты на ${shiftDays} дн. до освобождения техники после ремонта.`,
+    };
+  }
+
+  async getServiceRiskResolution(
+    serviceEventId: string,
+    siteId: string,
+  ): Promise<ServiceRiskResolutionView> {
+    await this.assertSite(siteId);
+    const event = await this.findServiceRiskEventOrThrow(serviceEventId);
+    const affectedPlans = await this.findAffectedPlansForServiceRisk(
+      event,
+      siteId,
+    );
+    const serviceRange = this.getServiceDateRange(event);
+
+    if (affectedPlans.length === 0) {
+      return {
+        serviceEventId: event.id,
+        siteId,
+        hasRisk: false,
+        serviceTitle: event.title,
+        serviceStartDate: serviceRange?.startDate.toISOString() ?? null,
+        serviceEndDate: serviceRange?.endDate.toISOString() ?? null,
+        affectedVehicleId: event.vehicleId,
+        affectedVehicleLabel: `${event.vehicle.brand} ${event.vehicle.model} · ${event.vehicle.plateNumber}`,
+        affectedAssignments: [],
+        replacementOptions: [],
+        recommendedAction: 'none',
+        shiftSuggestion: null,
+      };
+    }
+
+    const replacementOptions = await this.findReplacementOptionsForServiceRisk({
+      event,
+      affectedPlans,
+    });
+    const shiftSuggestion = this.buildServiceRiskShiftSuggestion(
+      event,
+      affectedPlans,
+    );
+
+    return {
+      serviceEventId: event.id,
+      siteId,
+      hasRisk: true,
+      serviceTitle: event.title,
+      serviceStartDate: serviceRange?.startDate.toISOString() ?? null,
+      serviceEndDate: serviceRange?.endDate.toISOString() ?? null,
+      affectedVehicleId: event.vehicleId,
+      affectedVehicleLabel: `${event.vehicle.brand} ${event.vehicle.model} · ${event.vehicle.plateNumber}`,
+      affectedAssignments: affectedPlans.map((plan) =>
+        this.formatServiceRiskAssignment(plan),
+      ),
+      replacementOptions,
+      recommendedAction:
+        replacementOptions.length > 0
+          ? 'replace'
+          : shiftSuggestion
+            ? 'shift'
+            : 'none',
+      shiftSuggestion,
+    };
+  }
+
+  async resolveServiceRisk(
+    serviceEventId: string,
+    dto: ResolveServiceRiskDto,
+  ): Promise<ResolvedServiceRiskView> {
+    await this.assertSite(dto.siteId);
+    const event = await this.findServiceRiskEventOrThrow(serviceEventId);
+    const affectedPlans = await this.findAffectedPlansForServiceRisk(
+      event,
+      dto.siteId,
+    );
+    if (affectedPlans.length === 0) {
+      throw new ConflictException(
+        'По этой заявке нет назначений, требующих переназначения или сдвига',
+      );
+    }
+
+    if (dto.action === ServiceRiskResolutionAction.replace) {
+      if (!dto.replacementVehicleId) {
+        throw new ConflictException('Выберите технику для переназначения');
+      }
+      const replacementOptions =
+        await this.findReplacementOptionsForServiceRisk({
+          event,
+          affectedPlans,
+        });
+      const selectedReplacement = replacementOptions.find(
+        (vehicle) => vehicle.id === dto.replacementVehicleId,
+      );
+      if (!selectedReplacement) {
+        throw new ConflictException(
+          'Выбранная техника уже занята, находится в ТО/ремонте или не подходит по типу',
+        );
+      }
+
+      try {
+        const result = await this.prisma.equipmentPlanAssignment.updateMany({
+          where: { id: { in: affectedPlans.map((plan) => plan.id) } },
+          data: {
+            vehicleId: selectedReplacement.id,
+            notes: `Переназначено из-за сервисного риска "${event.title}".`,
+          },
+        });
+
+        return {
+          action: dto.action,
+          updatedAssignments: result.count,
+          shiftedStages: 0,
+          shiftDays: 0,
+          resolution: await this.getServiceRiskResolution(
+            serviceEventId,
+            dto.siteId,
+          ),
+        };
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'Выбранная техника уже занята в одной из затронутых смен',
+          );
+        }
+        throw error;
+      }
+    }
+
+    const shiftSuggestion = this.buildServiceRiskShiftSuggestion(
+      event,
+      affectedPlans,
+    );
+    if (!shiftSuggestion) {
+      throw new ConflictException('Не удалось рассчитать сдвиг этапов');
+    }
+
+    const affectedStageIds = [
+      ...new Set(
+        affectedPlans
+          .map((plan) => plan.stageId)
+          .filter((stageId): stageId is string => Boolean(stageId)),
+      ),
+    ];
+    const plansToShift =
+      affectedStageIds.length > 0
+        ? await this.prisma.equipmentPlanAssignment.findMany({
+            where: {
+              siteId: dto.siteId,
+              stageId: { in: affectedStageIds },
+              status: { not: 'failed' },
+            },
+            include: equipmentPlanInclude,
+          })
+        : affectedPlans;
+    const shiftedDates = plansToShift.map((plan) =>
+      this.addDays(plan.workDate, shiftSuggestion.shiftDays),
+    );
+    const shiftedRange = this.planDateRange(
+      shiftedDates.map((workDate) => ({ workDate })),
+    );
+
+    if (shiftedRange) {
+      const [existingPlans, blockingServices] = await Promise.all([
+        this.prisma.equipmentPlanAssignment.findMany({
+          where: {
+            id: { notIn: plansToShift.map((plan) => plan.id) },
+            vehicleId: {
+              in: [...new Set(plansToShift.map((plan) => plan.vehicleId))],
+            },
+            workDate: {
+              gte: shiftedRange.min,
+              lte: shiftedRange.max,
+            },
+            status: { not: 'failed' },
+          },
+          select: {
+            vehicleId: true,
+            workDate: true,
+            shift: true,
+          },
+        }),
+        this.prisma.fleetServiceEvent.findMany({
+          where: {
+            vehicleId: {
+              in: [...new Set(plansToShift.map((plan) => plan.vehicleId))],
+            },
+            ...this.serviceBlockingWhere(shiftedRange.min, shiftedRange.max),
+          },
+          select: {
+            vehicleId: true,
+            startDate: true,
+            endDate: true,
+            dueAt: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+      const occupiedSlots = new Set(
+        existingPlans.map((plan) =>
+          this.planSlotKey(plan.vehicleId, plan.workDate, plan.shift),
+        ),
+      );
+      const conflictPlan = plansToShift.find((plan) => {
+        const shiftedDate = this.addDays(
+          plan.workDate,
+          shiftSuggestion.shiftDays,
+        );
+        const hasPlanConflict = occupiedSlots.has(
+          this.planSlotKey(plan.vehicleId, shiftedDate, plan.shift),
+        );
+        const hasServiceConflict = blockingServices.some(
+          (service) =>
+            service.vehicleId === plan.vehicleId &&
+            this.serviceOverlapsDate(service, shiftedDate),
+        );
+        return hasPlanConflict || hasServiceConflict;
+      });
+      if (conflictPlan) {
+        throw new ConflictException(
+          'Нельзя сдвинуть этапы автоматически: в новых датах есть занятость или ТО/ремонт. Выберите замену техники или пересчитайте объект.',
+        );
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const stageId of affectedStageIds) {
+        const stage = plansToShift.find(
+          (plan) => plan.stageId === stageId,
+        )?.stage;
+        if (!stage) continue;
+        await tx.roadWorkStage.update({
+          where: { id: stageId },
+          data: {
+            startDate: this.addDays(stage.startDate, shiftSuggestion.shiftDays),
+            endDate: this.addDays(stage.endDate, shiftSuggestion.shiftDays),
+            notes: `${stage.notes ? `${stage.notes} ` : ''}Этап сдвинут из-за сервисного риска "${event.title}".`,
+          },
+        });
+      }
+
+      for (const plan of plansToShift) {
+        await tx.equipmentPlanAssignment.update({
+          where: { id: plan.id },
+          data: {
+            workDate: this.addDays(plan.workDate, shiftSuggestion.shiftDays),
+            notes: `${plan.notes ? `${plan.notes} ` : ''}Смена сдвинута из-за сервисного риска "${event.title}".`,
+          },
+        });
+      }
+    });
+
+    return {
+      action: dto.action,
+      updatedAssignments: plansToShift.length,
+      shiftedStages: affectedStageIds.length,
+      shiftDays: shiftSuggestion.shiftDays,
+      resolution: await this.getServiceRiskResolution(
+        serviceEventId,
+        dto.siteId,
+      ),
+    };
   }
 
   async getWorkTypes(): Promise<RoadWorkTypeTemplateView[]> {

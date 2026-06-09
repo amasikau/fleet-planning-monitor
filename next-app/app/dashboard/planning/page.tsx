@@ -35,6 +35,7 @@ import type {
   RoadWorkStageType,
   RoadWorkTypeTemplate,
   ServiceEvent,
+  ServiceRiskResolution,
 } from "@/lib/types"
 import {
   EQUIPMENT_CALCULATION_KIND_LABELS,
@@ -1650,6 +1651,7 @@ function SavedPlanView({
   serviceEvents,
   onPlanClick,
   onResetPlan,
+  onPlanResolved,
   resetLoading,
 }: {
   site: ConstructionSite
@@ -1658,6 +1660,7 @@ function SavedPlanView({
   serviceEvents: ServiceEvent[]
   onPlanClick: () => void
   onResetPlan: () => void
+  onPlanResolved: () => Promise<void>
   resetLoading: boolean
 }) {
   const tasks = getStageTasksFromSaved(stages)
@@ -1678,6 +1681,91 @@ function SavedPlanView({
 
     return serviceRange.end >= riskStart && serviceRange.start <= riskEnd
   })
+  const serviceRiskKey = serviceRisks.map((event) => event.id).join("|")
+  const [riskResolutions, setRiskResolutions] = useState<
+    Record<string, ServiceRiskResolution>
+  >({})
+  const [selectedReplacementByRisk, setSelectedReplacementByRisk] = useState<
+    Record<string, string>
+  >({})
+  const [resolvingRiskId, setResolvingRiskId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadRiskResolutions() {
+      if (serviceRisks.length === 0) {
+        setRiskResolutions({})
+        setSelectedReplacementByRisk({})
+        return
+      }
+
+      try {
+        const resolutions = await Promise.all(
+          serviceRisks.map((event) =>
+            api.equipmentPlans.getServiceRiskResolution(event.id, site.id)
+          )
+        )
+        if (!mounted) return
+        setRiskResolutions(
+          Object.fromEntries(
+            resolutions.map((resolution) => [
+              resolution.serviceEventId,
+              resolution,
+            ])
+          )
+        )
+      } catch (error) {
+        if (mounted) {
+          toast.error(
+            getErrorMessage(error, "Не удалось рассчитать варианты замены")
+          )
+        }
+      }
+    }
+
+    void loadRiskResolutions()
+
+    return () => {
+      mounted = false
+    }
+  }, [serviceRiskKey, site.id])
+
+  const handleResolveRisk = async (
+    event: ServiceEvent,
+    action: "replace" | "shift"
+  ) => {
+    const selectedReplacementId = selectedReplacementByRisk[event.id]
+
+    if (action === "replace" && !selectedReplacementId) {
+      toast.error("Выберите свободную технику для переназначения")
+      return
+    }
+
+    setResolvingRiskId(event.id)
+    try {
+      const result = await api.equipmentPlans.resolveServiceRisk(event.id, {
+        siteId: site.id,
+        action,
+        replacementVehicleId:
+          action === "replace" ? selectedReplacementId : undefined,
+      })
+      if (action === "replace") {
+        toast.success(
+          `Переназначено смен техники: ${result.updatedAssignments}`
+        )
+      } else {
+        toast.success(
+          `Этапы сдвинуты на ${result.shiftDays} дн., обновлено смен: ${result.updatedAssignments}`
+        )
+      }
+      await onPlanResolved()
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Не удалось обработать риск"))
+    } finally {
+      setResolvingRiskId(null)
+    }
+  }
 
   if (tasks.length === 0) {
     return (
@@ -1793,17 +1881,131 @@ function SavedPlanView({
               </p>
             ) : (
               serviceRisks.map((event) => (
-                <div key={event.id} className="rounded-md border p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">{event.vehicleLabel}</p>
+                <div
+                  key={event.id}
+                  className="min-w-0 overflow-hidden rounded-md border p-3"
+                >
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="min-w-0 text-sm font-medium break-words">
+                      {event.vehicleLabel}
+                    </p>
                     <Badge variant="secondary">
                       {SERVICE_EVENT_STATUS_LABELS[event.status]}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs break-words text-muted-foreground">
                     {SERVICE_EVENT_TYPE_LABELS[event.type]} · {event.title}
                     {event.dueAt ? ` · ${formatDate(event.dueAt)}` : ""}
                   </p>
+                  {riskResolutions[event.id] ? (
+                    <div className="mt-3 flex min-w-0 flex-col gap-3">
+                      <div className="min-w-0 rounded-md bg-muted/50 p-3 text-xs break-words text-muted-foreground">
+                        {riskResolutions[event.id].hasRisk ? (
+                          <>
+                            Затронуто смен:{" "}
+                            {
+                              riskResolutions[event.id].affectedAssignments
+                                .length
+                            }
+                            . Техника:{" "}
+                            {riskResolutions[event.id].affectedVehicleLabel}.
+                          </>
+                        ) : (
+                          "Заявка рядом с периодом работ, но текущие смены объекта не пересекаются с ремонтом."
+                        )}
+                      </div>
+
+                      {riskResolutions[event.id].hasRisk &&
+                        riskResolutions[event.id].replacementOptions.length >
+                          0 && (
+                          <div className="grid min-w-0 gap-2">
+                            <p className="text-xs font-medium break-words">
+                              Свободная техника того же типа
+                            </p>
+                            <div className="flex min-w-0 flex-col gap-2">
+                              <Select
+                                value={
+                                  selectedReplacementByRisk[event.id] ?? ""
+                                }
+                                onValueChange={(value) =>
+                                  setSelectedReplacementByRisk((current) => ({
+                                    ...current,
+                                    [event.id]: value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="w-full min-w-0">
+                                  <SelectValue placeholder="Выберите замену" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {riskResolutions[
+                                    event.id
+                                  ].replacementOptions.map((vehicle) => (
+                                    <SelectItem
+                                      key={vehicle.id}
+                                      value={vehicle.id}
+                                    >
+                                      {vehicle.brand} {vehicle.model} ·{" "}
+                                      {vehicle.plateNumber}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                className="w-fit"
+                                onClick={() =>
+                                  void handleResolveRisk(event, "replace")
+                                }
+                                disabled={resolvingRiskId === event.id}
+                              >
+                                Переназначить
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                      {riskResolutions[event.id].shiftSuggestion && (
+                        <Alert>
+                          <AlertTitle>
+                            {riskResolutions[event.id].replacementOptions
+                              .length > 0
+                              ? "Если замену не выбрать"
+                              : "Свободной техники такого типа нет"}
+                          </AlertTitle>
+                          <AlertDescription className="flex min-w-0 flex-col gap-2 break-words">
+                            <span className="min-w-0">
+                              {
+                                riskResolutions[event.id].shiftSuggestion
+                                  ?.message
+                              }{" "}
+                              Новая дата окончания:{" "}
+                              {formatDate(
+                                riskResolutions[event.id].shiftSuggestion
+                                  ?.shiftedEndDate ?? ""
+                              )}
+                              .
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-fit"
+                              onClick={() =>
+                                void handleResolveRisk(event, "shift")
+                              }
+                              disabled={resolvingRiskId === event.id}
+                            >
+                              Сдвинуть этапы
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Рассчитываем варианты замены...
+                    </p>
+                  )}
                 </div>
               ))
             )}
@@ -1952,6 +2154,7 @@ export default function PlanningPage() {
                 serviceEvents={serviceEvents}
                 onPlanClick={() => setPlanningOpen(true)}
                 onResetPlan={handleResetPlan}
+                onPlanResolved={fetchData}
                 resetLoading={resettingPlan}
               />
             )}
@@ -2000,6 +2203,7 @@ export default function PlanningPage() {
                     serviceEvents={serviceEvents}
                     onPlanClick={() => setPlanningOpen(true)}
                     onResetPlan={handleResetPlan}
+                    onPlanResolved={fetchData}
                     resetLoading={resettingPlan}
                   />
                 )}

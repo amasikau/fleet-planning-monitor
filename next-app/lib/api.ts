@@ -19,6 +19,8 @@ import type {
   RoadWorkStageTemplate,
   EquipmentPlanDraft,
   AppliedEquipmentPlanDraft,
+  ResolvedServiceRisk,
+  ServiceRiskResolution,
 } from "@/lib/types"
 import { translateErrorMessage } from "@/lib/feedback"
 
@@ -262,6 +264,25 @@ export const api = {
         deletedDemands: number
         deletedAssignments: number
       }>(`/equipment-plans/site/${siteId}`, { method: "DELETE" }),
+    getServiceRiskResolution: (serviceEventId: string, siteId: string) =>
+      fetchApi<ServiceRiskResolution>(
+        `/equipment-plans/service-risks/${serviceEventId}?${new URLSearchParams({ siteId }).toString()}`
+      ),
+    resolveServiceRisk: (
+      serviceEventId: string,
+      data: {
+        siteId: string
+        action: "replace" | "shift"
+        replacementVehicleId?: string
+      }
+    ) =>
+      fetchApi<ResolvedServiceRisk>(
+        `/equipment-plans/service-risks/${serviceEventId}/resolve`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
     create: (data: Record<string, unknown>) =>
       fetchApi<EquipmentPlan>("/equipment-plans", {
         method: "POST",

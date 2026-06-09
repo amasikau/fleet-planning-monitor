@@ -79,6 +79,7 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
     equipmentPlanAssignment: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       create: jest.fn().mockResolvedValue({ id: 'plan-created' }),
+      update: jest.fn().mockResolvedValue({ id: 'plan-updated' }),
     },
     equipmentDemand: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -87,6 +88,7 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
     roadWorkStage: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       create: jest.fn().mockResolvedValue({ id: 'stage-created' }),
+      update: jest.fn().mockResolvedValue({ id: 'stage-updated' }),
     },
   };
 
@@ -107,6 +109,7 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     equipmentDemand: {
       findMany: jest.fn().mockResolvedValue([]),
@@ -116,6 +119,7 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
       findUnique: jest.fn().mockResolvedValue(null),
     },
     fleetServiceEvent: {
+      findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn().mockResolvedValue(null),
     },
@@ -145,6 +149,7 @@ function stageRecord(
     status: 'planned',
     startDate: new Date('2026-06-10T00:00:00.000Z'),
     endDate: new Date('2026-06-12T00:00:00.000Z'),
+    notes: '',
     ...overrides,
   };
 }
@@ -184,11 +189,33 @@ function planRecord(
     actualHours: null,
     status: 'planned',
     notes: '',
+    site: baseSite,
+    stage: stageRecord(),
+    demand: demandRecord(),
     vehicle: {
       id: 'dump-1',
+      brand: 'МАЗ',
+      model: 'dump-1',
+      plateNumber: 'DUMP-1-7',
       type: 'dump_truck',
       status: 'active',
     },
+    ...overrides,
+  };
+}
+
+function serviceRiskEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'service-1',
+    vehicleId: 'dump-1',
+    vehicle: fleetVehicle('dump-1'),
+    type: 'repair',
+    status: 'scheduled',
+    title: 'Ремонт гидросистемы',
+    startDate: new Date('2026-06-10T00:00:00.000Z'),
+    endDate: new Date('2026-06-12T00:00:00.000Z'),
+    dueAt: null,
+    createdAt: new Date('2026-06-01T00:00:00.000Z'),
     ...overrides,
   };
 }
@@ -1038,6 +1065,140 @@ describe('EquipmentPlansService coverage and reset', () => {
     });
     expect(prisma.__tx.roadWorkStage.deleteMany).toHaveBeenCalledWith({
       where: { siteId: baseSite.id },
+    });
+  });
+});
+
+describe('EquipmentPlansService service risk resolution', () => {
+  it('offers free same-type equipment for a service risk in an existing plan', async () => {
+    const affectedPlan = planRecord();
+    const replacement = fleetVehicle('dump-2');
+    const prisma = createPrismaMock({
+      fleetServiceEvent: {
+        findUnique: jest.fn().mockResolvedValue(serviceRiskEvent()),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      equipmentPlanAssignment: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([affectedPlan])
+          .mockResolvedValueOnce([]),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      fleetVehicle: {
+        findMany: jest.fn().mockResolvedValue([replacement]),
+        findUnique: jest.fn().mockResolvedValue(replacement),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const result = await service.getServiceRiskResolution(
+      'service-1',
+      baseSite.id,
+    );
+
+    expect(result.hasRisk).toBe(true);
+    expect(result.recommendedAction).toBe('replace');
+    expect(result.affectedAssignments).toHaveLength(1);
+    expect(result.replacementOptions).toEqual([
+      expect.objectContaining({ id: replacement.id }),
+    ]);
+  });
+
+  it('reassigns affected plan rows to the selected replacement vehicle', async () => {
+    const affectedPlan = planRecord();
+    const replacement = fleetVehicle('dump-2');
+    const equipmentFindMany = jest
+      .fn()
+      .mockResolvedValueOnce([affectedPlan])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = createPrismaMock({
+      fleetServiceEvent: {
+        findUnique: jest.fn().mockResolvedValue(serviceRiskEvent()),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      equipmentPlanAssignment: {
+        findMany: equipmentFindMany,
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany,
+      },
+      fleetVehicle: {
+        findMany: jest.fn().mockResolvedValue([replacement]),
+        findUnique: jest.fn().mockResolvedValue(replacement),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const result = await service.resolveServiceRisk('service-1', {
+      siteId: baseSite.id,
+      action: 'replace',
+      replacementVehicleId: replacement.id,
+    } as never);
+
+    expect(result.updatedAssignments).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['plan-1'] } },
+      data: {
+        vehicleId: replacement.id,
+        notes: 'Переназначено из-за сервисного риска "Ремонт гидросистемы".',
+      },
+    });
+  });
+
+  it('shifts the affected stage after service completion when replacement is not used', async () => {
+    const affectedPlan = planRecord();
+    const equipmentFindMany = jest
+      .fn()
+      .mockResolvedValueOnce([affectedPlan])
+      .mockResolvedValueOnce([affectedPlan])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const prisma = createPrismaMock({
+      fleetServiceEvent: {
+        findUnique: jest.fn().mockResolvedValue(serviceRiskEvent()),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      equipmentPlanAssignment: {
+        findMany: equipmentFindMany,
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    const result = await service.resolveServiceRisk('service-1', {
+      siteId: baseSite.id,
+      action: 'shift',
+    } as never);
+
+    expect(result.shiftDays).toBe(3);
+    expect(result.shiftedStages).toBe(1);
+    expect(prisma.__tx.roadWorkStage.update).toHaveBeenCalledWith({
+      where: { id: 'stage-1' },
+      data: expect.objectContaining({
+        startDate: new Date('2026-06-13T00:00:00.000Z'),
+        endDate: new Date('2026-06-15T00:00:00.000Z'),
+      }),
+    });
+    expect(prisma.__tx.equipmentPlanAssignment.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: expect.objectContaining({
+        workDate: new Date('2026-06-13T00:00:00.000Z'),
+      }),
     });
   });
 });
