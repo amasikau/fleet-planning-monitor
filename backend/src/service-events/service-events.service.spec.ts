@@ -71,6 +71,79 @@ function createPrismaMock(options?: {
 }
 
 describe('ServiceEventsService vehicle status sync', () => {
+  beforeEach(() => {
+    jest
+      .useFakeTimers()
+      .setSystemTime(new Date('2026-06-13T12:00:00.000Z').getTime());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('calculates scheduled status before the service period starts', async () => {
+    const prisma = createPrismaMock({
+      existingEvent: serviceEvent({
+        startDate: new Date('2026-06-20T00:00:00.000Z'),
+        endDate: new Date('2026-06-22T00:00:00.000Z'),
+      }),
+    });
+    const service = new ServiceEventsService(prisma as never);
+
+    await service.update('event-1', { title: 'Будущий ремонт' } as never, {
+      id: 'user-1',
+      role: 'user',
+    });
+
+    expect(prisma.fleetServiceEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'scheduled' }),
+      }),
+    );
+  });
+
+  it('calculates in-progress status during the service period', async () => {
+    const prisma = createPrismaMock({
+      existingEvent: serviceEvent({
+        startDate: new Date('2026-06-12T00:00:00.000Z'),
+        endDate: new Date('2026-06-14T00:00:00.000Z'),
+      }),
+    });
+    const service = new ServiceEventsService(prisma as never);
+
+    await service.update('event-1', { title: 'Текущий ремонт' } as never, {
+      id: 'user-1',
+      role: 'user',
+    });
+
+    expect(prisma.fleetServiceEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'in_progress' }),
+      }),
+    );
+  });
+
+  it('calculates overdue status after the service period ends', async () => {
+    const prisma = createPrismaMock({
+      existingEvent: serviceEvent({
+        startDate: new Date('2026-06-09T00:00:00.000Z'),
+        endDate: new Date('2026-06-10T00:00:00.000Z'),
+      }),
+    });
+    const service = new ServiceEventsService(prisma as never);
+
+    await service.update('event-1', { title: 'Просроченный ремонт' } as never, {
+      id: 'user-1',
+      role: 'user',
+    });
+
+    expect(prisma.fleetServiceEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'overdue' }),
+      }),
+    );
+  });
+
   it('sets vehicle status to repair for an in-progress repair', async () => {
     const prisma = createPrismaMock({
       activeEvents: [{ type: 'repair' }],
@@ -82,7 +155,7 @@ describe('ServiceEventsService vehicle status sync', () => {
     });
     const service = new ServiceEventsService(prisma as never);
 
-    await service.update('event-1', { status: 'in_progress' } as never, {
+    await service.update('event-1', { title: 'Ремонт гидросистемы' } as never, {
       id: 'user-1',
       role: 'user',
     });
@@ -108,7 +181,7 @@ describe('ServiceEventsService vehicle status sync', () => {
     });
     const service = new ServiceEventsService(prisma as never);
 
-    await service.update('event-1', { status: 'in_progress' } as never, {
+    await service.update('event-1', { title: 'Плановое ТО' } as never, {
       id: 'user-1',
       role: 'user',
     });
@@ -134,10 +207,7 @@ describe('ServiceEventsService vehicle status sync', () => {
     });
     const service = new ServiceEventsService(prisma as never);
 
-    await service.update('event-1', { status: 'completed' } as never, {
-      id: 'user-1',
-      role: 'user',
-    });
+    await service.complete('event-1');
 
     expect(prisma.fleetVehicle.update).toHaveBeenCalledWith({
       where: { id: baseVehicle.id },

@@ -5,11 +5,59 @@ import { UsersStats } from "@/components/users/users-stats"
 import { UsersTable } from "@/components/users/users-table"
 import { AuditLog } from "@/components/users/audit-log"
 import type { User, AuditLogEntry } from "@/lib/types"
+import { USER_ROLE_LABELS, USER_STATUS_LABELS } from "@/lib/types"
 import { api } from "@/lib/api"
+import { ExportActions } from "@/components/export-actions"
 import { useRole } from "@/contexts/role-context"
 import { useRouter } from "next/navigation"
 import { getErrorMessage } from "@/lib/feedback"
+import {
+  exportDataAsDocx,
+  exportDataAsXlsx,
+  formatRuDate,
+  todayInputDate,
+  type ExportDocumentConfig,
+} from "@/lib/export-documents"
 import { toast } from "sonner"
+
+function buildUsersExportConfig(users: User[]): ExportDocumentConfig {
+  const today = todayInputDate()
+
+  return {
+    fileName: `users_${today}`,
+    title: "Список пользователей",
+    subtitle: "Учетные записи и права доступа",
+    documentDate: today,
+    sections: [
+      {
+        title: "Пользователи",
+        table: {
+          emptyText: "Пользователи отсутствуют",
+          columns: [
+            { header: "Логин", value: "username", width: 18 },
+            { header: "Фамилия", value: "lastName", width: 18 },
+            { header: "Имя", value: "firstName", width: 18 },
+            { header: "Отчество", value: "middleName", width: 18 },
+            { header: "Роль", value: "role", width: 18 },
+            { header: "Должность", value: "position", width: 26 },
+            { header: "Статус", value: "status", width: 16 },
+            { header: "Создан", value: "createdAt", width: 16 },
+          ],
+          rows: users.map((user) => ({
+            username: user.username,
+            lastName: user.lastName,
+            firstName: user.firstName,
+            middleName: user.middleName || "—",
+            role: USER_ROLE_LABELS[user.role],
+            position: user.position || "—",
+            status: USER_STATUS_LABELS[user.status],
+            createdAt: formatRuDate(user.createdAt),
+          })),
+        },
+      },
+    ],
+  }
+}
 
 export default function UsersPage() {
   const { isAdmin, role, username } = useRole()
@@ -70,11 +118,17 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
-        <h1 className="text-2xl font-bold">Управление пользователями</h1>
-        <p className="text-sm text-muted-foreground">
-          Просмотр, создание, редактирование и управление доступом пользователей
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 lg:px-6">
+        <div>
+          <h1 className="text-2xl font-bold">Управление пользователями</h1>
+          <p className="text-sm text-muted-foreground">
+            Просмотр, создание, редактирование и управление доступом пользователей
+          </p>
+        </div>
+        <ExportActions
+          onExportExcel={() => exportDataAsXlsx(buildUsersExportConfig(users))}
+          onExportDocx={() => exportDataAsDocx(buildUsersExportConfig(users))}
+        />
       </div>
       <UsersStats users={users} />
       <UsersTable initialUsers={users} onDataChange={fetchData} currentUsername={currentUsername} />

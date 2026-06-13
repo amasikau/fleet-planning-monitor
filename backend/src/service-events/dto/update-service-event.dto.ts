@@ -10,7 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { FleetServiceEventStatus, FleetServiceEventType } from '@prisma/client';
+import { FleetServiceEventType } from '@prisma/client';
 
 export class ServiceWorkLogDto {
   @IsDateString()
@@ -32,10 +32,6 @@ export class UpdateServiceEventDto {
   @IsEnum(FleetServiceEventType)
   @IsOptional()
   type?: FleetServiceEventType;
-
-  @IsEnum(FleetServiceEventStatus)
-  @IsOptional()
-  status?: FleetServiceEventStatus;
 
   @IsString()
   @IsOptional()
@@ -59,10 +55,6 @@ export class UpdateServiceEventDto {
   @IsDateString()
   @IsOptional()
   dueAt?: string;
-
-  @IsDateString()
-  @IsOptional()
-  completedAt?: string | null;
 
   @IsInt()
   @IsOptional()

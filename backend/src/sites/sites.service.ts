@@ -56,11 +56,11 @@ export interface AvailableVehicleView {
 }
 
 const siteListInclude = {
-  _count: { select: { vehicles: true, equipmentPlans: true } },
+  _count: { select: { vehicles: true, equipmentPlans: true, workStages: true } },
 } satisfies Prisma.ConstructionSiteInclude;
 
 const siteDetailInclude = {
-  _count: { select: { vehicles: true, equipmentPlans: true } },
+  _count: { select: { vehicles: true, equipmentPlans: true, workStages: true } },
   vehicles: {
     include: {
       vehicle: true,
@@ -81,10 +81,13 @@ export class SitesService {
   constructor(private readonly prisma: PrismaService) {}
 
   private formatSite(site: SiteListRecord): ConstructionSiteView {
+    const hasPlannedWork =
+      site._count.equipmentPlans > 0 || site._count.workStages > 0;
+
     return {
       id: site.id,
       name: site.name,
-      workType: site.workType,
+      workType: hasPlannedWork ? site.workType : '',
       city: site.city,
       address: site.address,
       latitude: site.latitude,

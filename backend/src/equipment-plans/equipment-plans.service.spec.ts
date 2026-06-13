@@ -90,6 +90,9 @@ function createPrismaMock(overrides: Record<string, unknown> = {}) {
       create: jest.fn().mockResolvedValue({ id: 'stage-created' }),
       update: jest.fn().mockResolvedValue({ id: 'stage-updated' }),
     },
+    constructionSite: {
+      update: jest.fn().mockResolvedValue({ id: baseSite.id }),
+    },
   };
 
   const prisma = {
@@ -738,6 +741,33 @@ describe('EquipmentPlansService planning draft', () => {
     );
   });
 
+  it('stores selected work type name on the road object when applying a plan', async () => {
+    const prisma = createPrismaMock({
+      fleetVehicle: {
+        findMany: jest.fn().mockResolvedValue([fleetVehicle('dump-1')]),
+      },
+    });
+    const service = new EquipmentPlansService(prisma as never);
+
+    await service.applyDraft(
+      {
+        ...baseDto,
+        stages: [
+          draftStage({
+            name: 'Подвоз смеси',
+            equipmentRules: [equipmentRule()],
+          }),
+        ],
+      } as never,
+      'user-1',
+    );
+
+    expect(prisma.__tx.constructionSite.update).toHaveBeenCalledWith({
+      where: { id: baseSite.id },
+      data: { workType: baseTemplate.name },
+    });
+  });
+
   it('bounds calculated demand counts by min and max limits', async () => {
     const prisma = createPrismaMock();
     const service = new EquipmentPlansService(prisma as never);
@@ -1065,6 +1095,10 @@ describe('EquipmentPlansService coverage and reset', () => {
     });
     expect(prisma.__tx.roadWorkStage.deleteMany).toHaveBeenCalledWith({
       where: { siteId: baseSite.id },
+    });
+    expect(prisma.__tx.constructionSite.update).toHaveBeenCalledWith({
+      where: { id: baseSite.id },
+      data: { workType: 'Планирование' },
     });
   });
 });

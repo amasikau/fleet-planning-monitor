@@ -150,6 +150,10 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(data),
       }),
+    complete: (id: string) =>
+      fetchApi<ServiceEvent>(`/service-events/${id}/complete`, {
+        method: "PATCH",
+      }),
     delete: (id: string) =>
       fetchApi<{ success: boolean }>(`/service-events/${id}`, {
         method: "DELETE",

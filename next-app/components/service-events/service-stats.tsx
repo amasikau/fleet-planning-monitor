@@ -1,7 +1,6 @@
 "use client"
 
 import type { ServiceStats } from "@/lib/types"
-import { Card, CardContent } from "@/components/ui/card"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Calendar03Icon,
@@ -20,7 +19,7 @@ export function ServiceStatsCards({ stats }: { stats: ServiceStats }) {
       bgClass: "bg-sky-500/12",
     },
     {
-      label: "В ремонте",
+      label: "В работе",
       value: stats.inProgress,
       icon: Loading03Icon,
       iconClass: "text-blue-600",
@@ -45,25 +44,26 @@ export function ServiceStatsCards({ stats }: { stats: ServiceStats }) {
   return (
     <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
       {items.map((s) => (
-        <Card key={s.label}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${s.bgClass}`}
-            >
-              <HugeiconsIcon
-                icon={s.icon}
-                strokeWidth={2}
-                className={`size-5 ${s.iconClass}`}
-              />
-            </div>
-            <div>
-              <p className="text-2xl leading-none font-bold tabular-nums">
-                {s.value}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          key={s.label}
+          className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm"
+        >
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${s.bgClass}`}
+          >
+            <HugeiconsIcon
+              icon={s.icon}
+              strokeWidth={2}
+              className={`size-5 ${s.iconClass}`}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl leading-none font-bold tabular-nums">
+              {s.value}
+            </p>
+            <p className="mt-1 text-xs font-medium">{s.label}</p>
+          </div>
+        </div>
       ))}
     </div>
   )

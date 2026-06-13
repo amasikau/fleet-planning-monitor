@@ -317,7 +317,7 @@ export class FleetService {
   }
 
   private getStatusLabel(status: FleetVehicleViewStatus) {
-    if (status === 'active') return 'В работе';
+    if (status === 'active') return 'Готова';
     if (status === 'reserve') return 'Не используется';
     return 'В ремонте';
   }

@@ -309,16 +309,11 @@ export function UsersTable({ initialUsers, onDataChange, currentUsername }: User
                   <TableRow key={user.id}>
                     <TableCell className="pl-6">
                       <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
-                              {user.lastName[0]}{user.firstName[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          {user.isOnline && (
-                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
-                          )}
-                        </div>
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {user.lastName[0]}{user.firstName[0]}
+                          </AvatarFallback>
+                        </Avatar>
                         <span className="font-medium">{user.username}</span>
                       </div>
                     </TableCell>

@@ -33,20 +33,26 @@ import type {
   FleetVehicleType,
   RoadWorkStage,
   RoadWorkStageType,
+  RoadWorkStageTemplate,
   RoadWorkTypeTemplate,
   ServiceEvent,
   ServiceRiskResolution,
 } from "@/lib/types"
 import {
   EQUIPMENT_CALCULATION_KIND_LABELS,
+  EQUIPMENT_DEMAND_PRIORITY_LABELS,
+  EQUIPMENT_PLAN_SHIFT_LABELS,
+  EQUIPMENT_PLAN_STATUS_LABELS,
   FLEET_VEHICLE_TYPE_LABELS,
   ROAD_WORK_STAGE_TYPE_LABELS,
+  ROAD_WORK_STAGE_STATUS_LABELS,
   SERVICE_EVENT_STATUS_LABELS,
   SERVICE_EVENT_TYPE_LABELS,
 } from "@/lib/types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ExportActions } from "@/components/export-actions"
 import {
   Card,
   CardContent,
@@ -88,6 +94,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import {
+  exportDataAsDocx,
+  exportDataAsXlsx,
+  todayInputDate,
+  type ExportDocumentConfig,
+} from "@/lib/export-documents"
 
 const stageTypeOptions: RoadWorkStageType[] = [
   "survey",
@@ -109,6 +121,12 @@ const calculationOptions: EquipmentCalculationKind[] = [
   "fixed",
   "per_km",
   "asphalt_delivery",
+]
+
+const priorityOptions: EquipmentDemandPriority[] = [
+  "normal",
+  "high",
+  "critical",
 ]
 
 type DraftRule = {
@@ -136,16 +154,28 @@ type DraftStage = {
   equipmentRules: DraftRule[]
 }
 
-type StageEditorForm = {
-  name: string
-  type: RoadWorkStageType
-  startOffsetDays: string
-  durationDays: string
+type StageRuleEditorForm = {
+  id: string
   vehicleType: FleetVehicleType
   calculationKind: EquipmentCalculationKind
   baseCount: string
   countPerKm: string
+  minCount: string
+  maxCount: string
+  plannedHours: string
   priority: EquipmentDemandPriority
+  notes: string
+}
+
+type StageEditorForm = {
+  templateStageId?: string
+  name: string
+  type: RoadWorkStageType
+  startOffsetDays: string
+  durationDays: string
+  canOverlap: boolean
+  notes: string
+  equipmentRules: StageRuleEditorForm[]
 }
 
 type SelectedVehicles = Record<string, string[]>
@@ -175,6 +205,12 @@ function formatShortDate(value: string) {
     day: "2-digit",
     month: "2-digit",
   }).format(new Date(value))
+}
+
+function getPlannedWorkTypeLabel(site?: ConstructionSite | null) {
+  const value = site?.workType?.trim()
+  if (!value || value === "Планирование") return "Вид работ не выбран"
+  return value
 }
 
 function dateKey(value: string | Date) {
@@ -268,19 +304,70 @@ function scaleTemplateStages(
   }))
 }
 
-function getStageEditorForm(stage: DraftStage | null): StageEditorForm {
-  const firstRule = stage?.equipmentRules[0]
+function getRuleEditorForm(
+  rule?: Partial<DraftRule>,
+  index = 0
+): StageRuleEditorForm {
+  return {
+    id: `rule-${index}`,
+    vehicleType: rule?.vehicleType ?? "dump_truck",
+    calculationKind: rule?.calculationKind ?? "fixed",
+    baseCount: String(rule?.baseCount ?? 1),
+    countPerKm: String(rule?.countPerKm ?? 0),
+    minCount: String(rule?.minCount ?? 1),
+    maxCount: rule?.maxCount == null ? "" : String(rule.maxCount),
+    plannedHours: String(rule?.plannedHours ?? 8),
+    priority: rule?.priority ?? "normal",
+    notes: rule?.notes ?? "",
+  }
+}
+
+function getStageEditorForm(
+  stage: DraftStage | null,
+  defaultStartOffsetDays = 0
+): StageEditorForm {
+  const equipmentRules = stage?.equipmentRules.length
+    ? stage.equipmentRules.map((rule, index) => getRuleEditorForm(rule, index))
+    : [getRuleEditorForm()]
 
   return {
+    templateStageId: stage?.templateStageId,
     name: stage?.name ?? "",
     type: stage?.type ?? "preparation",
-    startOffsetDays: String(stage?.startOffsetDays ?? 0),
+    startOffsetDays: String(stage?.startOffsetDays ?? defaultStartOffsetDays),
     durationDays: String(stage?.durationDays ?? 1),
-    vehicleType: firstRule?.vehicleType ?? "dump_truck",
-    calculationKind: firstRule?.calculationKind ?? "fixed",
-    baseCount: String(firstRule?.baseCount ?? 1),
-    countPerKm: String(firstRule?.countPerKm ?? 0),
-    priority: firstRule?.priority ?? "normal",
+    canOverlap: stage?.canOverlap ?? false,
+    notes: stage?.notes ?? "Добавлено в конструкторе расчёта.",
+    equipmentRules,
+  }
+}
+
+function getDraftStageFromTemplate(
+  template: RoadWorkStageTemplate,
+  sequence: number,
+  startOffsetDays?: number
+): DraftStage {
+  return {
+    id: `template-${template.id}-${crypto.randomUUID()}`,
+    templateStageId: template.id,
+    type: template.type,
+    name: template.name,
+    sequence,
+    startOffsetDays: startOffsetDays ?? template.startOffsetDays,
+    durationDays: template.durationDays,
+    canOverlap: template.canOverlap,
+    notes: template.notes,
+    equipmentRules: template.equipmentRules.map((rule) => ({
+      vehicleType: rule.vehicleType,
+      calculationKind: rule.calculationKind,
+      baseCount: rule.baseCount,
+      countPerKm: rule.countPerKm,
+      minCount: rule.minCount,
+      maxCount: rule.maxCount,
+      plannedHours: rule.plannedHours,
+      priority: rule.priority,
+      notes: rule.notes,
+    })),
   }
 }
 
@@ -316,6 +403,128 @@ function getStageTasksFromSaved(stages: RoadWorkStage[]) {
     endDate: stage.endDate,
     subtitle: ROAD_WORK_STAGE_TYPE_LABELS[stage.type],
   }))
+}
+
+function buildPlanningExportConfig({
+  selectedSite,
+  stages,
+  plans,
+}: {
+  selectedSite: ConstructionSite | null
+  stages: RoadWorkStage[]
+  plans: EquipmentPlan[]
+}): ExportDocumentConfig {
+  const today = todayInputDate()
+  const orderedStages = [...stages].sort(
+    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  )
+  const orderedPlans = [...plans].sort(
+    (a, b) =>
+      new Date(a.workDate).getTime() - new Date(b.workDate).getTime() ||
+      a.siteName.localeCompare(b.siteName, "ru")
+  )
+  const workType =
+    orderedPlans[0]?.siteWorkType ??
+    orderedStages[0]?.siteWorkType ??
+    getPlannedWorkTypeLabel(selectedSite)
+  const tasks = getStageTasksFromSaved(orderedStages)
+  const targetName = selectedSite?.name ?? "все объекты"
+  const planPeriod =
+    orderedStages.length > 0
+      ? `${formatDate(new Date(Math.min(...orderedStages.map((stage) => new Date(stage.startDate).getTime()))).toISOString())} - ${formatDate(new Date(Math.max(...orderedStages.map((stage) => new Date(stage.endDate).getTime()))).toISOString())}`
+      : "не запланировано"
+
+  return {
+    fileName: selectedSite
+      ? `planning_${selectedSite.name}_${today}`
+      : `planning_all_${today}`,
+    title: selectedSite ? "План-график дорожного объекта" : "Сводный план-график дорожных объектов",
+    subtitle: selectedSite ? selectedSite.name : "Все дорожные объекты",
+    documentDate: today,
+    sections: [
+      {
+        title: "Общие сведения",
+        table: {
+          columns: [
+            { header: "Показатель", value: "label", width: 30 },
+            { header: "Значение", value: "value", width: 60 },
+          ],
+          rows: [
+            { label: "Объект", value: targetName },
+            { label: "Вид работ", value: workType || "вид работ не выбран" },
+            { label: "Количество этапов", value: orderedStages.length },
+            { label: "Количество смен техники", value: orderedPlans.length },
+            {
+              label: "Плановый период",
+              value: planPeriod,
+            },
+          ],
+        },
+      },
+      {
+        title: "Этапы работ",
+        table: {
+          emptyText: "Этапы не сформированы",
+          columns: [
+            { header: "Объект", value: "site", width: 28 },
+            { header: "Этап", value: "stage", width: 34 },
+            { header: "Тип этапа", value: "type", width: 24 },
+            { header: "Начало", value: "start", width: 14 },
+            { header: "Окончание", value: "end", width: 14 },
+            { header: "Статус", value: "status", width: 16 },
+            { header: "Примечание", value: "notes", width: 32 },
+          ],
+          rows: orderedStages.map((stage) => ({
+            site: stage.siteName,
+            stage: stage.name,
+            type: ROAD_WORK_STAGE_TYPE_LABELS[stage.type],
+            start: formatDate(stage.startDate),
+            end: formatDate(stage.endDate),
+            status: ROAD_WORK_STAGE_STATUS_LABELS[stage.status],
+            notes: stage.notes || "—",
+          })),
+        },
+        gantt: {
+          title: "Диаграмма Ганта по этапам",
+          emptyText: "Этапы для диаграммы отсутствуют",
+          tasks: tasks.map((task) => ({
+            name: task.name,
+            startDate: task.startDate,
+            endDate: task.endDate,
+            subtitle: task.subtitle,
+          })),
+        },
+      },
+      {
+        title: "Назначения техники",
+        table: {
+          emptyText: "Техника не назначена",
+          columns: [
+            { header: "Дата", value: "date", width: 14 },
+            { header: "Объект", value: "site", width: 28 },
+            { header: "Этап", value: "stage", width: 30 },
+            { header: "Техника", value: "vehicle", width: 34 },
+            { header: "Тип техники", value: "vehicleType", width: 28 },
+            { header: "Смена", value: "shift", width: 14 },
+            { header: "Плановые часы", value: "plannedHours", width: 14 },
+            { header: "Фактические часы", value: "actualHours", width: 14 },
+            { header: "Статус", value: "status", width: 16 },
+          ],
+          rows: orderedPlans.map((plan) => ({
+            date: formatDate(plan.workDate),
+            site: plan.siteName,
+            stage: plan.stageName ?? "без этапа",
+            vehicle: plan.vehicleLabel,
+            vehicleType: FLEET_VEHICLE_TYPE_LABELS[plan.vehicleType],
+            shift: EQUIPMENT_PLAN_SHIFT_LABELS[plan.shift],
+            plannedHours: plan.plannedHours,
+            actualHours: plan.actualHours ?? "не заполнено",
+            status: EQUIPMENT_PLAN_STATUS_LABELS[plan.status],
+          })),
+        },
+      },
+    ],
+  }
 }
 
 function getDateRange(tasks: GanttTask[]) {
@@ -604,23 +813,73 @@ function GanttChart({
 function StageEditorDialog({
   open,
   stage,
+  stageTemplates,
+  nextStartOffsetDays,
   onOpenChange,
   onSave,
 }: {
   open: boolean
   stage: DraftStage | null
+  stageTemplates: RoadWorkStageTemplate[]
+  nextStartOffsetDays: number
   onOpenChange: (open: boolean) => void
   onSave: (stage: DraftStage) => void
 }) {
   const [form, setForm] = useState<StageEditorForm>(() =>
-    getStageEditorForm(stage)
+    getStageEditorForm(stage, nextStartOffsetDays)
   )
+
+  const applyStageTemplate = (templateId: string) => {
+    const template = stageTemplates.find((item) => item.id === templateId)
+    if (!template) return
+
+    const draftStage = getDraftStageFromTemplate(
+      template,
+      stage?.sequence ?? 1,
+      stage?.startOffsetDays ?? nextStartOffsetDays
+    )
+
+    setForm(getStageEditorForm(draftStage, nextStartOffsetDays))
+  }
+
+  const updateRule = (
+    ruleId: string,
+    patch: Partial<Omit<StageRuleEditorForm, "id">>
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      equipmentRules: prev.equipmentRules.map((rule) =>
+        rule.id === ruleId ? { ...rule, ...patch } : rule
+      ),
+    }))
+  }
+
+  const addRule = () => {
+    setForm((prev) => ({
+      ...prev,
+      equipmentRules: [
+        ...prev.equipmentRules,
+        {
+          ...getRuleEditorForm(undefined, prev.equipmentRules.length),
+          id: crypto.randomUUID(),
+        },
+      ],
+    }))
+  }
+
+  const removeRule = (ruleId: string) => {
+    setForm((prev) => ({
+      ...prev,
+      equipmentRules:
+        prev.equipmentRules.length > 1
+          ? prev.equipmentRules.filter((rule) => rule.id !== ruleId)
+          : prev.equipmentRules,
+    }))
+  }
 
   const handleSave = () => {
     const durationDays = Number.parseInt(form.durationDays, 10)
     const startOffsetDays = Number.parseInt(form.startOffsetDays, 10)
-    const baseCount = Number.parseInt(form.baseCount, 10)
-    const countPerKm = Number.parseFloat(form.countPerKm)
 
     if (!form.name.trim()) {
       toast.error("Укажите название этапа")
@@ -634,41 +893,87 @@ function StageEditorDialog({
       toast.error("Смещение старта не может быть отрицательным")
       return
     }
-    if (Number.isNaN(baseCount) || baseCount < 1) {
-      toast.error("Количество техники должно быть не меньше 1")
+    if (form.equipmentRules.length === 0) {
+      toast.error("Добавьте хотя бы один тип техники для этапа")
       return
+    }
+
+    const equipmentRules: DraftRule[] = []
+
+    for (const [index, rule] of form.equipmentRules.entries()) {
+      const baseCount = Number.parseInt(rule.baseCount, 10)
+      const countPerKm = Number.parseFloat(rule.countPerKm)
+      const minCount = Number.parseInt(rule.minCount, 10)
+      const maxCount = rule.maxCount.trim()
+        ? Number.parseInt(rule.maxCount, 10)
+        : null
+      const plannedHours = Number.parseInt(rule.plannedHours, 10)
+      const ruleLabel = `Техника ${index + 1}`
+
+      if (Number.isNaN(baseCount) || baseCount < 0) {
+        toast.error(
+          `${ruleLabel}: базовое количество не может быть отрицательным`
+        )
+        return
+      }
+      if (Number.isNaN(countPerKm) || countPerKm < 0) {
+        toast.error(`${ruleLabel}: значение ед./км не может быть отрицательным`)
+        return
+      }
+      if (Number.isNaN(minCount) || minCount < 0) {
+        toast.error(`${ruleLabel}: минимум техники не может быть отрицательным`)
+        return
+      }
+      if (maxCount !== null && (Number.isNaN(maxCount) || maxCount < 1)) {
+        toast.error(`${ruleLabel}: максимум техники должен быть не меньше 1`)
+        return
+      }
+      if (maxCount !== null && minCount > maxCount) {
+        toast.error(`${ruleLabel}: минимум не может быть больше максимума`)
+        return
+      }
+      if (Number.isNaN(plannedHours) || plannedHours < 1 || plannedHours > 24) {
+        toast.error(`${ruleLabel}: плановые часы должны быть от 1 до 24`)
+        return
+      }
+      if (baseCount === 0 && countPerKm === 0 && minCount === 0) {
+        toast.error(
+          `${ruleLabel}: задайте базовое количество, ед./км или минимум`
+        )
+        return
+      }
+
+      equipmentRules.push({
+        vehicleType: rule.vehicleType,
+        calculationKind: rule.calculationKind,
+        baseCount,
+        countPerKm,
+        minCount,
+        maxCount,
+        plannedHours,
+        priority: rule.priority,
+        notes: rule.notes.trim(),
+      })
     }
 
     onSave({
       id: stage?.id ?? `custom-${crypto.randomUUID()}`,
-      templateStageId: stage?.templateStageId,
+      templateStageId: form.templateStageId,
       type: form.type,
       name: form.name.trim(),
       sequence: stage?.sequence ?? 1,
       startOffsetDays,
       durationDays,
-      canOverlap: stage?.canOverlap ?? false,
-      notes: stage?.notes ?? "Добавлено в конструкторе расчёта.",
-      equipmentRules: [
-        {
-          vehicleType: form.vehicleType,
-          calculationKind: form.calculationKind,
-          baseCount,
-          countPerKm: Number.isNaN(countPerKm) ? 0 : countPerKm,
-          minCount: 1,
-          maxCount: null,
-          plannedHours: 8,
-          priority: form.priority,
-          notes: "",
-        },
-      ],
+      canOverlap: form.canOverlap,
+      notes: form.notes.trim(),
+      equipmentRules,
     })
     onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>{stage ? "Изменение этапа" : "Новый этап"}</DialogTitle>
           <DialogDescription>
@@ -679,11 +984,39 @@ function StageEditorDialog({
 
         <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field className="sm:col-span-2 lg:col-span-3">
+            <FieldLabel>Этап из базы</FieldLabel>
+            <Select
+              value={form.templateStageId ?? ""}
+              onValueChange={applyStageTemplate}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Выберите этап из базы или заполните вручную" />
+              </SelectTrigger>
+              <SelectContent>
+                {stageTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name} ·{" "}
+                    {ROAD_WORK_STAGE_TYPE_LABELS[template.type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field className="sm:col-span-2 lg:col-span-3">
             <FieldLabel>Название этапа</FieldLabel>
             <Input
               value={form.name}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, name: event.target.value }))
+              }
+            />
+          </Field>
+          <Field className="sm:col-span-2 lg:col-span-3">
+            <FieldLabel>Примечание</FieldLabel>
+            <Input
+              value={form.notes}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, notes: event.target.value }))
               }
             />
           </Field>
@@ -738,76 +1071,202 @@ function StageEditorDialog({
               }
             />
           </Field>
-          <Field>
-            <FieldLabel>Техника этапа</FieldLabel>
-            <Select
-              value={form.vehicleType}
-              onValueChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  vehicleType: value as FleetVehicleType,
-                }))
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(FLEET_VEHICLE_TYPE_LABELS).map(
-                  ([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
+          <Field className="sm:col-span-2 lg:col-span-3">
+            <label className="flex items-start gap-3 rounded-md border p-3">
+              <Checkbox
+                checked={form.canOverlap}
+                onCheckedChange={(checked) =>
+                  setForm((prev) => ({ ...prev, canOverlap: checked === true }))
+                }
+              />
+              <span className="grid gap-1">
+                <span className="text-sm font-medium">
+                  Может выполняться параллельно
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Этап допускает пересечение с соседними технологическими
+                  операциями.
+                </span>
+              </span>
+            </label>
           </Field>
-          <Field>
-            <FieldLabel>Метод расчёта</FieldLabel>
-            <Select
-              value={form.calculationKind}
-              onValueChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  calculationKind: value as EquipmentCalculationKind,
-                }))
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {calculationOptions.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {EQUIPMENT_CALCULATION_KIND_LABELS[value]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Базовое количество</FieldLabel>
-            <Input
-              type="number"
-              min={1}
-              value={form.baseCount}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, baseCount: event.target.value }))
-              }
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Ед./км</FieldLabel>
-            <Input
-              type="number"
-              min={0}
-              step={0.1}
-              value={form.countPerKm}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, countPerKm: event.target.value }))
-              }
-            />
+          <Field className="sm:col-span-2 lg:col-span-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <FieldLabel>Техника этапа</FieldLabel>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Для этапа можно указать несколько типов техники из базы
+                  потребностей.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRule}
+              >
+                Добавить технику
+              </Button>
+            </div>
+            <div className="mt-3 flex flex-col gap-3">
+              {form.equipmentRules.map((rule, index) => (
+                <div key={rule.id} className="rounded-md border p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <Badge variant="secondary">Техника {index + 1}</Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeRule(rule.id)}
+                      disabled={form.equipmentRules.length === 1}
+                    >
+                      Удалить
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Field>
+                      <FieldLabel>Тип техники</FieldLabel>
+                      <Select
+                        value={rule.vehicleType}
+                        onValueChange={(value) =>
+                          updateRule(rule.id, {
+                            vehicleType: value as FleetVehicleType,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(FLEET_VEHICLE_TYPE_LABELS).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Метод расчёта</FieldLabel>
+                      <Select
+                        value={rule.calculationKind}
+                        onValueChange={(value) =>
+                          updateRule(rule.id, {
+                            calculationKind: value as EquipmentCalculationKind,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {calculationOptions.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {EQUIPMENT_CALCULATION_KIND_LABELS[value]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Базовое количество</FieldLabel>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={rule.baseCount}
+                        onChange={(event) =>
+                          updateRule(rule.id, { baseCount: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Ед./км</FieldLabel>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={rule.countPerKm}
+                        onChange={(event) =>
+                          updateRule(rule.id, {
+                            countPerKm: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Минимум</FieldLabel>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={rule.minCount}
+                        onChange={(event) =>
+                          updateRule(rule.id, { minCount: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Максимум</FieldLabel>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="Без ограничения"
+                        value={rule.maxCount}
+                        onChange={(event) =>
+                          updateRule(rule.id, { maxCount: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Плановые часы</FieldLabel>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={rule.plannedHours}
+                        onChange={(event) =>
+                          updateRule(rule.id, {
+                            plannedHours: event.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Приоритет</FieldLabel>
+                      <Select
+                        value={rule.priority}
+                        onValueChange={(value) =>
+                          updateRule(rule.id, {
+                            priority: value as EquipmentDemandPriority,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {priorityOptions.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {EQUIPMENT_DEMAND_PRIORITY_LABELS[value]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field className="sm:col-span-2 lg:col-span-4">
+                      <FieldLabel>Примечание к технике</FieldLabel>
+                      <Input
+                        value={rule.notes}
+                        onChange={(event) =>
+                          updateRule(rule.id, { notes: event.target.value })
+                        }
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
           </Field>
         </FieldGroup>
 
@@ -908,6 +1367,7 @@ function PlanWizardDialog({
   site,
   hasExistingPlan,
   workTypes,
+  stageTemplates,
   vehicles,
   allPlans,
   onOpenChange,
@@ -917,6 +1377,7 @@ function PlanWizardDialog({
   site: ConstructionSite | null
   hasExistingPlan: boolean
   workTypes: RoadWorkTypeTemplate[]
+  stageTemplates: RoadWorkStageTemplate[]
   vehicles: FleetVehicle[]
   allPlans: EquipmentPlan[]
   onOpenChange: (open: boolean) => void
@@ -1163,6 +1624,10 @@ function PlanWizardDialog({
   const hasPlanningShortage = draft
     ? countShortage(draft, selectedVehicles) > 0
     : false
+  const nextStageStartOffsetDays = stages.reduce(
+    (sum, stage) => sum + Math.max(stage.durationDays, 1),
+    0
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1233,7 +1698,7 @@ function PlanWizardDialog({
             <div className="rounded-lg border p-4">
               <p className="text-sm font-medium">{site?.name}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {site?.workType}
+                Вид работ будет взят из выбранного шаблона планирования.
               </p>
               <Separator className="my-3" />
               <p className="text-sm font-medium">{workType?.name}</p>
@@ -1587,6 +2052,8 @@ function PlanWizardDialog({
           key={stageEditorKey}
           open={stageEditorOpen}
           stage={editingStage}
+          stageTemplates={stageTemplates}
+          nextStartOffsetDays={nextStageStartOffsetDays}
           onOpenChange={setStageEditorOpen}
           onSave={saveStage}
         />
@@ -1634,7 +2101,9 @@ function ObjectSidebar({
                 </Badge>
               </div>
               <p className="mt-1 line-clamp-2 min-w-0 text-xs break-words text-muted-foreground">
-                {site.workType || site.address}
+                {count > 0
+                  ? getPlannedWorkTypeLabel(site)
+                  : "План по объекту не создан"}
               </p>
             </button>
           )
@@ -1802,7 +2271,7 @@ function SavedPlanView({
           <div>
             <CardTitle>{site.name}</CardTitle>
             <CardDescription>
-              {site.workType} · {plans.length} смен техники
+              {getPlannedWorkTypeLabel(site)} · {plans.length} смен техники
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -2019,6 +2488,9 @@ function SavedPlanView({
 export default function PlanningPage() {
   const [sites, setSites] = useState<ConstructionSite[]>([])
   const [workTypes, setWorkTypes] = useState<RoadWorkTypeTemplate[]>([])
+  const [stageTemplates, setStageTemplates] = useState<RoadWorkStageTemplate[]>(
+    []
+  )
   const [plans, setPlans] = useState<EquipmentPlan[]>([])
   const [stages, setStages] = useState<RoadWorkStage[]>([])
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
@@ -2033,6 +2505,7 @@ export default function PlanningPage() {
       const [
         sitesData,
         workTypesData,
+        stageTemplatesData,
         plansData,
         stagesData,
         vehiclesData,
@@ -2040,6 +2513,7 @@ export default function PlanningPage() {
       ] = await Promise.all([
         api.sites.getAll(),
         api.equipmentPlans.getWorkTypes(),
+        api.equipmentPlans.getStageTemplates(),
         api.equipmentPlans.getAll(),
         api.equipmentPlans.getStages(),
         api.fleet.getAll(),
@@ -2047,6 +2521,7 @@ export default function PlanningPage() {
       ])
       setSites(sitesData)
       setWorkTypes(workTypesData)
+      setStageTemplates(stageTemplatesData)
       setPlans(plansData)
       setStages(stagesData)
       setVehicles(vehiclesData)
@@ -2087,6 +2562,12 @@ export default function PlanningPage() {
     (stage) => stage.siteId === selectedSiteId
   )
   const selectedPlans = plans.filter((plan) => plan.siteId === selectedSiteId)
+  const planningExportConfig = () =>
+    buildPlanningExportConfig({
+      selectedSite,
+      stages: selectedSite ? selectedStages : stages,
+      plans: selectedSite ? selectedPlans : plans,
+    })
   const hasSelectedPlan = planExists(selectedStages, selectedPlans)
   const stagesBySite = useMemo(() => {
     const map = new Map<string, number>()
@@ -2109,12 +2590,18 @@ export default function PlanningPage() {
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
-        <h1 className="text-2xl font-bold">Планы, графики и база работ</h1>
-        <p className="text-sm text-muted-foreground">
-          Планирование начинается с выбора объекта, затем мастер строит этапы,
-          технику и итоговый график.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 lg:px-6">
+        <div>
+          <h1 className="text-2xl font-bold">Планы, графики и база работ</h1>
+          <p className="text-sm text-muted-foreground">
+            Планирование начинается с выбора объекта, затем мастер строит этапы,
+            технику и итоговый график.
+          </p>
+        </div>
+        <ExportActions
+          onExportExcel={() => exportDataAsXlsx(planningExportConfig())}
+          onExportDocx={() => exportDataAsDocx(planningExportConfig())}
+        />
       </div>
 
       <div className="px-4 lg:px-6">
@@ -2218,6 +2705,7 @@ export default function PlanningPage() {
         site={selectedSite}
         hasExistingPlan={hasSelectedPlan}
         workTypes={workTypes}
+        stageTemplates={stageTemplates}
         vehicles={vehicles}
         allPlans={plans}
         onOpenChange={setPlanningOpen}

@@ -24,6 +24,7 @@ import {
 } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ExportActions } from "@/components/export-actions"
 import {
   Card,
   CardContent,
@@ -58,6 +59,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  exportDataAsDocx,
+  exportDataAsXlsx,
+  todayInputDate,
+  type ExportDocumentConfig,
+} from "@/lib/export-documents"
 
 const stageTypeOptions: RoadWorkStageType[] = [
   "survey",
@@ -144,6 +151,155 @@ function getStageRuleForm(
   }
 }
 
+function buildWorkTypesExportConfig(
+  workTypes: RoadWorkTypeTemplate[]
+): ExportDocumentConfig {
+  const today = todayInputDate()
+
+  return {
+    fileName: `work_types_${today}`,
+    title: "Справочник видов дорожных работ",
+    subtitle: "Технологические карты и выбранные этапы",
+    documentDate: today,
+    sections: [
+      {
+        title: "Виды работ",
+        table: {
+          emptyText: "Виды работ отсутствуют",
+          columns: [
+            { header: "Код", value: "code", width: 16 },
+            { header: "Вид работ", value: "name", width: 30 },
+            { header: "Описание", value: "description", width: 38 },
+            { header: "Протяженность, км", value: "length", width: 16 },
+            { header: "Ширина, м", value: "width", width: 14 },
+            { header: "Смена, ч", value: "shift", width: 12 },
+            { header: "Плечо доставки, км", value: "haul", width: 16 },
+            { header: "Производительность, м/смена", value: "rate", width: 18 },
+            { header: "Этапы", value: "stages", width: 42 },
+          ],
+          rows: workTypes.map((workType) => ({
+            code: workType.code,
+            name: workType.name,
+            description: workType.description || "—",
+            length: workType.defaultLengthKm,
+            width: workType.defaultWidthM,
+            shift: workType.defaultShiftHours,
+            haul: workType.defaultHaulDistanceKm,
+            rate: workType.productionRateMPerDay,
+            stages:
+              workType.stageTemplates.length > 0
+                ? workType.stageTemplates.map((stage) => stage.name).join("; ")
+                : "этапы не выбраны",
+          })),
+        },
+      },
+      {
+        title: "Этапы по видам работ",
+        table: {
+          emptyText: "Связи видов работ и этапов отсутствуют",
+          columns: [
+            { header: "Вид работ", value: "workType", width: 30 },
+            { header: "Этап", value: "stage", width: 30 },
+            { header: "Тип этапа", value: "type", width: 24 },
+            { header: "Дней", value: "days", width: 10 },
+            { header: "Параллельно", value: "overlap", width: 14 },
+            { header: "Техника", value: "equipment", width: 40 },
+          ],
+          rows: workTypes.flatMap((workType) =>
+            workType.stageTemplates.map((stage) => ({
+              workType: workType.name,
+              stage: stage.name,
+              type: ROAD_WORK_STAGE_TYPE_LABELS[stage.type],
+              days: stage.durationDays,
+              overlap: stage.canOverlap ? "да" : "нет",
+              equipment:
+                stage.equipmentRules.length > 0
+                  ? stage.equipmentRules
+                      .map((rule) => FLEET_VEHICLE_TYPE_LABELS[rule.vehicleType])
+                      .join("; ")
+                  : "не указана",
+            }))
+          ),
+        },
+      },
+    ],
+  }
+}
+
+function buildStageTemplatesExportConfig(
+  stageTemplates: RoadWorkStageTemplate[]
+): ExportDocumentConfig {
+  const today = todayInputDate()
+
+  return {
+    fileName: `stage_templates_${today}`,
+    title: "Справочник этапов дорожных работ",
+    subtitle: "Типовые этапы и правила потребности в технике",
+    documentDate: today,
+    sections: [
+      {
+        title: "Этапы",
+        table: {
+          emptyText: "Этапы отсутствуют",
+          columns: [
+            { header: "Этап", value: "name", width: 34 },
+            { header: "Тип этапа", value: "type", width: 26 },
+            { header: "Дней", value: "days", width: 10 },
+            { header: "Параллельно", value: "overlap", width: 14 },
+            { header: "Техника", value: "equipment", width: 40 },
+            { header: "Примечание", value: "notes", width: 34 },
+          ],
+          rows: stageTemplates.map((stage) => ({
+            name: stage.name,
+            type: ROAD_WORK_STAGE_TYPE_LABELS[stage.type],
+            days: stage.durationDays,
+            overlap: stage.canOverlap ? "да" : "нет",
+            equipment:
+              stage.equipmentRules.length > 0
+                ? stage.equipmentRules
+                    .map((rule) => FLEET_VEHICLE_TYPE_LABELS[rule.vehicleType])
+                    .join("; ")
+                : "не указана",
+            notes: stage.notes || "—",
+          })),
+        },
+      },
+      {
+        title: "Правила потребности в технике",
+        table: {
+          emptyText: "Правила потребности отсутствуют",
+          columns: [
+            { header: "Этап", value: "stage", width: 30 },
+            { header: "Тип техники", value: "vehicleType", width: 28 },
+            { header: "Метод расчета", value: "calculation", width: 22 },
+            { header: "База", value: "base", width: 10 },
+            { header: "Ед./км", value: "perKm", width: 10 },
+            { header: "Мин.", value: "min", width: 8 },
+            { header: "Макс.", value: "max", width: 8 },
+            { header: "Часы", value: "hours", width: 10 },
+            { header: "Приоритет", value: "priority", width: 16 },
+            { header: "Примечание", value: "notes", width: 30 },
+          ],
+          rows: stageTemplates.flatMap((stage) =>
+            stage.equipmentRules.map((rule) => ({
+              stage: stage.name,
+              vehicleType: FLEET_VEHICLE_TYPE_LABELS[rule.vehicleType],
+              calculation: EQUIPMENT_CALCULATION_KIND_LABELS[rule.calculationKind],
+              base: rule.baseCount,
+              perKm: rule.countPerKm,
+              min: rule.minCount,
+              max: rule.maxCount ?? "—",
+              hours: rule.plannedHours,
+              priority: EQUIPMENT_DEMAND_PRIORITY_LABELS[rule.priority],
+              notes: rule.notes || "—",
+            }))
+          ),
+        },
+      },
+    ],
+  }
+}
+
 export function WorkTypesPage() {
   const { canEdit } = useRole()
   const [workTypes, setWorkTypes] = useState<RoadWorkTypeTemplate[]>([])
@@ -188,16 +344,26 @@ export function WorkTypesPage() {
             Технологические карты выбирают этапы из общей базы справочника.
           </p>
         </div>
-        {canEdit && (
-          <Button size="sm" onClick={() => openDialog(null)}>
-            <HugeiconsIcon
-              icon={PlusSignCircleIcon}
-              strokeWidth={2}
-              data-icon="inline-start"
-            />
-            Вид работ
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportActions
+            onExportExcel={() =>
+              exportDataAsXlsx(buildWorkTypesExportConfig(workTypes))
+            }
+            onExportDocx={() =>
+              exportDataAsDocx(buildWorkTypesExportConfig(workTypes))
+            }
+          />
+          {canEdit && (
+            <Button size="sm" onClick={() => openDialog(null)}>
+              <HugeiconsIcon
+                icon={PlusSignCircleIcon}
+                strokeWidth={2}
+                data-icon="inline-start"
+              />
+              Вид работ
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="px-4 lg:px-6">
@@ -531,16 +697,26 @@ export function StageTemplatesPage() {
             Общий справочник технологических этапов, из которого собираются виды работ.
           </p>
         </div>
-        {canEdit && (
-          <Button size="sm" onClick={() => openDialog(null)}>
-            <HugeiconsIcon
-              icon={PlusSignCircleIcon}
-              strokeWidth={2}
-              data-icon="inline-start"
-            />
-            Этап
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportActions
+            onExportExcel={() =>
+              exportDataAsXlsx(buildStageTemplatesExportConfig(stageTemplates))
+            }
+            onExportDocx={() =>
+              exportDataAsDocx(buildStageTemplatesExportConfig(stageTemplates))
+            }
+          />
+          {canEdit && (
+            <Button size="sm" onClick={() => openDialog(null)}>
+              <HugeiconsIcon
+                icon={PlusSignCircleIcon}
+                strokeWidth={2}
+                data-icon="inline-start"
+              />
+              Этап
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="px-4 lg:px-6">

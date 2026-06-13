@@ -2164,6 +2164,11 @@ export class EquipmentPlansService {
           });
         }
 
+        await tx.constructionSite.update({
+          where: { id: draft.siteId },
+          data: { workType: draft.workTypeName },
+        });
+
         for (const stage of draft.stages) {
           const createdStage = await tx.roadWorkStage.create({
             data: {
@@ -2314,6 +2319,10 @@ export class EquipmentPlansService {
       });
       const deletedStages = await tx.roadWorkStage.deleteMany({
         where: { siteId: site.id },
+      });
+      await tx.constructionSite.update({
+        where: { id: site.id },
+        data: { workType: 'Планирование' },
       });
 
       return {

@@ -37,8 +37,10 @@ import {
 type SortKey = "name" | "city"
 type SortDir = "asc" | "desc"
 
-function getWorkTypeLabel() {
-  return "Не указан"
+function getWorkTypeLabel(site: ConstructionSite) {
+  const workType = site.workType?.trim()
+  if (!workType || workType === "Планирование") return "Не указан"
+  return workType
 }
 
 interface SitesTableProps {
@@ -297,7 +299,7 @@ export function SitesTable({
                       {site.city || "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {getWorkTypeLabel()}
+                      {getWorkTypeLabel(site)}
                     </TableCell>
                     <TableCell>
                       {site.latitude != null && site.longitude != null ? (

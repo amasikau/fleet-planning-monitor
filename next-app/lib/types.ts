@@ -59,7 +59,7 @@ export interface AuditLogEntry {
 export type FleetVehicleStatus = "active" | "reserve" | "repair"
 
 export const FLEET_VEHICLE_STATUS_LABELS: Record<FleetVehicleStatus, string> = {
-  active: "В работе",
+  active: "Готова",
   reserve: "Не используется",
   repair: "В ремонте",
 }
@@ -215,7 +215,7 @@ export type ServiceEventStatus =
 
 export const SERVICE_EVENT_STATUS_LABELS: Record<ServiceEventStatus, string> = {
   scheduled: "Запланировано",
-  in_progress: "В ремонте",
+  in_progress: "В работе",
   overdue: "Просрочено",
   completed: "Завершено",
 }

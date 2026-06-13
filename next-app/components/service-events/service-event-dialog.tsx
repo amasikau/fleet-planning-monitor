@@ -35,13 +35,11 @@ import type {
   RepairTemplate,
   ServiceEvent,
   ServiceEventType,
-  ServiceEventStatus,
 } from "@/lib/types"
 import {
   FLEET_REPAIR_CATEGORY_LABELS,
   FLEET_VEHICLE_TYPE_LABELS,
   SERVICE_EVENT_TYPE_LABELS,
-  SERVICE_EVENT_STATUS_LABELS,
 } from "@/lib/types"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { toast } from "sonner"
@@ -49,7 +47,6 @@ import {
   Wrench01Icon,
   PencilEdit02Icon,
   Delete02Icon,
-  CheckmarkBadge01Icon,
   SearchIcon,
 } from "@hugeicons/core-free-icons"
 
@@ -61,8 +58,6 @@ export interface ServiceEventFormValues {
   startDate: string
   durationDays: number
   dueAt: string
-  status?: ServiceEventStatus
-  completedAt?: string | null
   mileageKm?: number | null
   defectDescription: string
   notes: string
@@ -90,8 +85,6 @@ function createInitialForm(
       new Date().toISOString().slice(0, 10),
     durationDays: event?.durationDays ?? 1,
     dueAt: event?.endDate?.slice(0, 10) ?? event?.dueAt?.slice(0, 10) ?? "",
-    status: event?.status ?? undefined,
-    completedAt: event?.completedAt?.slice(0, 10) ?? null,
     mileageKm: event?.mileageKm ?? null,
     defectDescription: event?.defectDescription ?? "",
     notes: event?.notes ?? "",
@@ -134,7 +127,6 @@ export function ServiceEventDialog({
     createInitialForm(event, vehicles)
   )
   const [showDirectory, setShowDirectory] = useState(false)
-  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false)
   const [templateSearch, setTemplateSearch] = useState("")
 
   const selectedVehicle = vehicles.find(
@@ -222,42 +214,6 @@ export function ServiceEventDialog({
       return
     }
     onSave(buildCleanForm())
-  }
-
-  const getTodayIso = () => new Date().toISOString().slice(0, 10)
-
-  const getInclusiveDays = (startDate: string, endDate: string) => {
-    const start = new Date(`${startDate}T00:00:00.000Z`)
-    const end = new Date(`${endDate}T00:00:00.000Z`)
-    const diff = end.getTime() - start.getTime()
-    return Math.max(Math.floor(diff / 86_400_000) + 1, 1)
-  }
-
-  const saveAsCompleted = () => {
-    if (!form.title.trim()) {
-      toast.error("Укажите название заявки")
-      return
-    }
-    if (!Number.isFinite(form.durationDays) || form.durationDays < 1) {
-      toast.error("Укажите срок ремонта не меньше 1 дня")
-      return
-    }
-    const completedAt = getTodayIso()
-    const startDate =
-      form.startDate && form.startDate <= completedAt
-        ? form.startDate
-        : completedAt
-
-    onSave(
-      buildCleanForm({
-        status: "completed",
-        completedAt,
-        startDate,
-        durationDays: getInclusiveDays(startDate, completedAt),
-        dueAt: completedAt,
-      })
-    )
-    setShowCompleteConfirm(false)
   }
 
   return (
@@ -360,38 +316,6 @@ export function ServiceEventDialog({
                   </SelectContent>
                 </Select>
               </div>
-
-              {isEdit && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Статус
-                  </label>
-                  <Select
-                    value={form.status}
-                    onValueChange={(value) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        status: value as ServiceEventStatus,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-9 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(
-                        Object.keys(
-                          SERVICE_EVENT_STATUS_LABELS
-                        ) as ServiceEventStatus[]
-                      ).map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {SERVICE_EVENT_STATUS_LABELS[status]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               <div className="sm:col-span-2">
                 <div className="mb-1 flex items-center gap-2">
@@ -541,21 +465,6 @@ export function ServiceEventDialog({
           </div>
 
           <DialogFooter className="shrink-0 border-t bg-popover px-6 py-4">
-            {isEdit && form.status !== "completed" && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowCompleteConfirm(true)}
-              >
-                <HugeiconsIcon
-                  icon={CheckmarkBadge01Icon}
-                  strokeWidth={2}
-                  className="mr-1.5 size-4"
-                />
-                Завершить досрочно
-              </Button>
-            )}
             <Button
               variant="outline"
               size="sm"
@@ -569,32 +478,6 @@ export function ServiceEventDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog
-        open={showCompleteConfirm}
-        onOpenChange={setShowCompleteConfirm}
-      >
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Завершить заявку досрочно?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Заявка будет переведена в статус «Завершено» текущей датой. Период
-              недоступности техники сократится до даты досрочного завершения.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <Button onClick={saveAsCompleted}>
-              <HugeiconsIcon
-                icon={CheckmarkBadge01Icon}
-                strokeWidth={2}
-                className="mr-1 size-4"
-              />
-              Завершить досрочно
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Dialog open={showDirectory} onOpenChange={setShowDirectory}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">

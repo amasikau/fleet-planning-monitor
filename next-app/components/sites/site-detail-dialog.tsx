@@ -43,6 +43,12 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
+function getWorkTypeLabel(workType: string) {
+  const value = workType.trim()
+  if (!value || value === "Планирование") return "Не указан"
+  return value
+}
+
 export function SiteDetailDialog({
   open,
   onOpenChange,
@@ -163,6 +169,19 @@ export function SiteDetailDialog({
                   <div>
                     <p className="text-xs text-muted-foreground">Город</p>
                     <p className="font-medium">{detail.city || "Не указан"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <HugeiconsIcon
+                    icon={Calendar03Icon}
+                    strokeWidth={1.8}
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                  />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Вид работ</p>
+                    <p className="font-medium">
+                      {getWorkTypeLabel(detail.workType)}
+                    </p>
                   </div>
                 </div>
                 {hasCoordinates && (

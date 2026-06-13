@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Put,
   Delete,
   Body,
@@ -84,6 +85,11 @@ export class ServiceEventsController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.service.update(id, dto, req.user);
+  }
+
+  @Patch(':id/complete')
+  async complete(@Param('id') id: string) {
+    return this.service.complete(id);
   }
 
   @Delete(':id')

@@ -442,11 +442,11 @@ export function YandexMapPicker({
   }, [latitude, longitude, setMarker])
 
   return (
-    <div className="relative">
+    <div className="relative h-full">
       <div
         ref={containerRef}
         style={{ width: "100%", height, filter: DARK_MAP_FILTER }}
-        className="overflow-hidden rounded-lg border border-border/40"
+        className="h-full overflow-hidden rounded-lg border border-border/40"
       />
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-muted/50">
@@ -473,7 +473,7 @@ export function SitesOverviewMap({
     longitude: number | null
     workType: string
   }[]
-  height?: number
+  height?: number | string
   onSiteClick?: (siteId: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)

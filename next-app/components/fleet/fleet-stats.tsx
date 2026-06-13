@@ -1,7 +1,6 @@
 "use client"
 
 import type { FleetVehicle } from "@/lib/types"
-import { Card, CardContent } from "@/components/ui/card"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Car01Icon,
@@ -20,7 +19,7 @@ export function FleetStats({ vehicles }: { vehicles: FleetVehicle[] }) {
       bgClass: "bg-primary/12",
     },
     {
-      label: "В работе",
+      label: "Готова",
       value: vehicles.filter((vehicle) => vehicle.status === "active").length,
       icon: CheckmarkBadge01Icon,
       iconClass: "text-emerald-600",
@@ -45,25 +44,26 @@ export function FleetStats({ vehicles }: { vehicles: FleetVehicle[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 px-4 lg:grid-cols-4 lg:px-6">
       {stats.map((stat) => (
-        <Card key={stat.label}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${stat.bgClass}`}
-            >
-              <HugeiconsIcon
-                icon={stat.icon}
-                strokeWidth={2}
-                className={`size-5 ${stat.iconClass}`}
-              />
-            </div>
-            <div>
-              <p className="text-2xl font-bold tabular-nums leading-none">
-                {stat.value}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          key={stat.label}
+          className="flex items-center gap-3 rounded-xl bg-card p-4 shadow-sm"
+        >
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${stat.bgClass}`}
+          >
+            <HugeiconsIcon
+              icon={stat.icon}
+              strokeWidth={2}
+              className={`size-5 ${stat.iconClass}`}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl leading-none font-bold tabular-nums">
+              {stat.value}
+            </p>
+            <p className="mt-1 text-xs font-medium">{stat.label}</p>
+          </div>
+        </div>
       ))}
     </div>
   )

@@ -21,6 +21,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -59,6 +68,7 @@ import {
   Delete02Icon,
   PlusSignCircleIcon,
   TextFontIcon,
+  CheckmarkBadge01Icon,
 } from "@hugeicons/core-free-icons"
 
 const statusBadgeStyles: Record<ServiceEventStatus, string> = {
@@ -116,6 +126,9 @@ export function ServiceTable({
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ServiceEvent | null>(null)
   const [deletingEvent, setDeletingEvent] = useState<ServiceEvent | null>(null)
+  const [completingEvent, setCompletingEvent] = useState<ServiceEvent | null>(
+    null
+  )
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<ServiceEventStatus | null>(
@@ -206,8 +219,6 @@ export function ServiceTable({
       startDate: values.startDate,
       durationDays: values.durationDays,
       dueAt: values.dueAt || undefined,
-      status: values.status,
-      completedAt: values.completedAt,
       mileageKm: undefined,
       defectDescription: values.defectDescription,
       notes: values.notes,
@@ -245,33 +256,20 @@ export function ServiceTable({
     setDeletingEvent(null)
   }
 
+  const handleComplete = async () => {
+    if (!completingEvent) return
+    try {
+      await api.serviceEvents.complete(completingEvent.id)
+      toast.success("Ремонт завершён")
+      onDataChange?.()
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Не удалось завершить ремонт"))
+    }
+    setCompletingEvent(null)
+  }
+
   return (
     <>
-      <div className="grid gap-3 px-4 lg:grid-cols-3 lg:px-6">
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">Очередь</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {events.filter((event) => event.status === "scheduled").length}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">В работе</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {events.filter((event) => event.status === "in_progress").length}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">Без периода</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {
-              events.filter(
-                (event) => event.status !== "completed" && !event.startDate
-              ).length
-            }
-          </p>
-        </div>
-      </div>
-
       <Card className="mx-4 overflow-hidden lg:mx-6">
         <CardHeader className="flex-row items-center gap-3">
           <div className="mr-auto flex items-center gap-2">
@@ -541,43 +539,60 @@ export function ServiceTable({
                           {formatDate(event.endDate)}
                         </TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                          <div className="flex items-center justify-end gap-1">
+                            {event.status !== "completed" && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
+                                title="Завершить ремонт"
+                                onClick={() => setCompletingEvent(event)}
                               >
                                 <HugeiconsIcon
-                                  icon={MoreHorizontalCircle01Icon}
+                                  icon={CheckmarkBadge01Icon}
                                   strokeWidth={2}
                                   className="size-4"
                                 />
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem
-                                onClick={() => setEditingEvent(event)}
-                              >
-                                <HugeiconsIcon
-                                  icon={PencilEdit02Icon}
-                                  strokeWidth={2}
-                                />
-                                Редактировать
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => setDeletingEvent(event)}
-                              >
-                                <HugeiconsIcon
-                                  icon={Delete02Icon}
-                                  strokeWidth={2}
-                                />
-                                Удалить
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                >
+                                  <HugeiconsIcon
+                                    icon={MoreHorizontalCircle01Icon}
+                                    strokeWidth={2}
+                                    className="size-4"
+                                  />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem
+                                  onClick={() => setEditingEvent(event)}
+                                >
+                                  <HugeiconsIcon
+                                    icon={PencilEdit02Icon}
+                                    strokeWidth={2}
+                                  />
+                                  Редактировать
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => setDeletingEvent(event)}
+                                >
+                                  <HugeiconsIcon
+                                    icon={Delete02Icon}
+                                    strokeWidth={2}
+                                  />
+                                  Удалить
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -616,6 +631,31 @@ export function ServiceTable({
         event={deletingEvent}
         onConfirm={handleDelete}
       />
+      <AlertDialog
+        open={!!completingEvent}
+        onOpenChange={(open) => !open && setCompletingEvent(null)}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Завершить ремонт?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Заявка будет завершена текущей датой. Техника снова станет
+              доступной, если по ней нет других активных ТО или ремонтов.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <Button onClick={handleComplete}>
+              <HugeiconsIcon
+                icon={CheckmarkBadge01Icon}
+                strokeWidth={2}
+                className="mr-1 size-4"
+              />
+              Завершить ремонт
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

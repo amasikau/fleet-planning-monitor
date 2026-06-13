@@ -206,6 +206,28 @@ export class ServiceEventsService {
     return { startDate, endDate, durationDays };
   }
 
+  private getAutomaticStatus(params: {
+    status?: FleetServiceEventStatus;
+    startDate?: Date | null;
+    endDate?: Date | null;
+    completedAt?: Date | null;
+    today?: Date;
+  }): FleetServiceEventStatus {
+    if (params.completedAt || params.status === 'completed') {
+      return 'completed';
+    }
+
+    const today = this.normalizeDate(params.today ?? new Date());
+    const startDate = params.startDate
+      ? this.normalizeDate(params.startDate)
+      : null;
+    const endDate = params.endDate ? this.normalizeDate(params.endDate) : null;
+
+    if (startDate && today < startDate) return 'scheduled';
+    if (endDate && today > endDate) return 'overdue';
+    return 'in_progress';
+  }
+
   private getPermissions() {
     return {
       canEdit: true,
@@ -226,7 +248,12 @@ export class ServiceEventsService {
         ? this.formatTemplate(event.repairTemplate)
         : null,
       type: event.type,
-      status: event.status,
+      status: this.getAutomaticStatus({
+        status: event.status,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        completedAt: event.completedAt,
+      }),
       title: event.title,
       startDate: event.startDate?.toISOString() ?? null,
       endDate: event.endDate?.toISOString() ?? null,
@@ -269,11 +296,14 @@ export class ServiceEventsService {
   }
 
   private async recalcVehicleStatus(vehicleId: string) {
+    const today = this.normalizeDate(new Date());
     const activeServiceEvents = await this.prisma.fleetServiceEvent.findMany({
       where: {
         vehicleId,
-        status: 'in_progress',
+        status: { not: 'completed' },
         type: { in: ['repair', 'maintenance'] },
+        startDate: { lte: today },
+        endDate: { gte: today },
       },
       select: { type: true },
     });
@@ -334,7 +364,6 @@ export class ServiceEventsService {
     const where: Prisma.FleetServiceEventWhereInput = {};
 
     if (query.vehicleId) where.vehicleId = query.vehicleId;
-    if (query.status) where.status = query.status as FleetServiceEventStatus;
     if (query.type) where.type = query.type as FleetServiceEventType;
 
     const events = await this.prisma.fleetServiceEvent.findMany({
@@ -344,6 +373,10 @@ export class ServiceEventsService {
     });
 
     let result = events.map((event) => this.formatEvent(event));
+
+    if (query.status) {
+      result = result.filter((event) => event.status === query.status);
+    }
 
     if (query.search) {
       const search = query.search.toLowerCase();
@@ -362,12 +395,17 @@ export class ServiceEventsService {
   }
 
   async getStats(): Promise<ServiceStatsView> {
-    const [scheduled, inProgress, overdue, completed] = await Promise.all([
-      this.prisma.fleetServiceEvent.count({ where: { status: 'scheduled' } }),
-      this.prisma.fleetServiceEvent.count({ where: { status: 'in_progress' } }),
-      this.prisma.fleetServiceEvent.count({ where: { status: 'overdue' } }),
-      this.prisma.fleetServiceEvent.count({ where: { status: 'completed' } }),
-    ]);
+    const events = await this.findAll({});
+    const scheduled = events.filter(
+      (event) => event.status === 'scheduled',
+    ).length;
+    const inProgress = events.filter(
+      (event) => event.status === 'in_progress',
+    ).length;
+    const overdue = events.filter((event) => event.status === 'overdue').length;
+    const completed = events.filter(
+      (event) => event.status === 'completed',
+    ).length;
 
     return { scheduled, inProgress, overdue, completed };
   }
@@ -488,7 +526,10 @@ export class ServiceEventsService {
         vehicleId: dto.vehicleId,
         repairTemplateId: template?.id ?? null,
         type: template?.serviceEventType ?? dto.type,
-        status: 'scheduled',
+        status: this.getAutomaticStatus({
+          startDate: period.startDate,
+          endDate: period.endDate,
+        }),
         title,
         startDate: period.startDate,
         endDate: period.endDate,
@@ -500,6 +541,8 @@ export class ServiceEventsService {
       },
       include: serviceEventInclude,
     });
+
+    await this.recalcVehicleStatus(dto.vehicleId);
 
     return this.formatEvent(event);
   }
@@ -519,7 +562,6 @@ export class ServiceEventsService {
     let nextTemplate: FleetRepairTemplate | null = existing.repairTemplate;
 
     if (dto.type !== undefined) updateData.type = dto.type;
-    if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.repairTemplateId !== undefined) {
       nextTemplate = dto.repairTemplateId
         ? await this.getTemplateForVehicle(
@@ -585,13 +627,20 @@ export class ServiceEventsService {
       };
     }
 
-    if (dto.status === 'completed') {
-      updateData.completedAt = dto.completedAt
-        ? new Date(dto.completedAt)
-        : new Date();
-    } else if (dto.status !== undefined) {
-      updateData.completedAt = null;
-    }
+    const nextStartDate =
+      updateData.startDate instanceof Date
+        ? updateData.startDate
+        : existing.startDate;
+    const nextEndDate =
+      updateData.endDate instanceof Date
+        ? updateData.endDate
+        : existing.endDate;
+    updateData.status = this.getAutomaticStatus({
+      status: existing.status,
+      startDate: nextStartDate,
+      endDate: nextEndDate,
+      completedAt: existing.completedAt,
+    });
 
     const updated = await this.prisma.fleetServiceEvent.update({
       where: { id },
@@ -599,13 +648,43 @@ export class ServiceEventsService {
       include: serviceEventInclude,
     });
 
-    if (
-      dto.status !== undefined ||
-      dto.type !== undefined ||
-      dto.repairTemplateId !== undefined
-    ) {
-      await this.recalcVehicleStatus(existing.vehicleId);
-    }
+    await this.recalcVehicleStatus(existing.vehicleId);
+
+    return this.formatEvent(updated);
+  }
+
+  async complete(id: string): Promise<ServiceEventView> {
+    const existing = await this.prisma.fleetServiceEvent.findUnique({
+      where: { id },
+      include: serviceEventInclude,
+    });
+    if (!existing) throw new NotFoundException('Заявка не найдена');
+
+    const completedAt = this.normalizeDate(new Date());
+    const startDate =
+      existing.startDate && existing.startDate <= completedAt
+        ? existing.startDate
+        : completedAt;
+    const durationDays =
+      Math.floor(
+        (completedAt.getTime() - this.normalizeDate(startDate).getTime()) /
+          86_400_000,
+      ) + 1;
+
+    const updated = await this.prisma.fleetServiceEvent.update({
+      where: { id },
+      data: {
+        status: 'completed',
+        completedAt,
+        startDate,
+        endDate: completedAt,
+        dueAt: completedAt,
+        durationDays: Math.max(durationDays, 1),
+      },
+      include: serviceEventInclude,
+    });
+
+    await this.recalcVehicleStatus(existing.vehicleId);
 
     return this.formatEvent(updated);
   }
